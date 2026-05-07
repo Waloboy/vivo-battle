@@ -9,10 +9,8 @@ CREATE TABLE public.profiles (
   full_name TEXT,
   city TEXT,
   bank_name TEXT,
-  bank_account_type TEXT,
-  bank_account_number TEXT,
-  bank_cedula TEXT,
-  bank_phone TEXT,
+  id_card TEXT,
+  phone_number TEXT,
   last_username_change TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -71,15 +69,33 @@ CREATE POLICY "Users can insert their own profile."
 CREATE POLICY "Users can update own profile."
   ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
--- Wallets: only owner can read
-CREATE POLICY "Users can view own wallet."
-  ON public.wallets FOR SELECT USING (auth.uid() = user_id);
-
--- Transactions: owner can read their own, insert their own.
+-- Transactions: owner can read/insert their own; admins can update all.
 CREATE POLICY "Users can view own transactions."
   ON public.transactions FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own transactions."
   ON public.transactions FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Admins can update any transaction."
+  ON public.transactions FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Wallets: owner can read & update own; admins can update any.
+CREATE POLICY "Users can view own wallet."
+  ON public.wallets FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can update own wallet."
+  ON public.wallets FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Admins can update any wallet."
+  ON public.wallets FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
 
 -- ==========================================
 -- TRIGGERS FOR NEW USERS

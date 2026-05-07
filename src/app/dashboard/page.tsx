@@ -58,16 +58,25 @@ export default function Dashboard() {
       alert("Por favor ingresa un monto válido y los últimos 6 dígitos de la referencia.");
       return;
     }
+
+    // Siempre obtener el user.id fresco de la sesión activa
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) {
+      alert("Sesión expirada. Por favor inicia sesión nuevamente.");
+      setIsSubmitting(false);
+      return;
+    }
+
     setIsSubmitting(true);
-    
-    // Convert BS to Credits (Example rate: 100 BS = 1000 Credits)
-    const amountCredits = Math.floor(parseFloat(amountBs) * 10); 
+
+    // Tasa: 100 BS = 1000 Créditos
+    const amountCredits = Math.floor(parseFloat(amountBs) * 10);
 
     const { error } = await supabase.from("transactions").insert({
-      user_id: user.id,
+      user_id: currentUser.id,
       type: "deposit",
-      amount_credits: amountCredits,
       amount_bs: parseFloat(amountBs),
+      amount_credits: amountCredits,
       reference_number: refNumber,
       status: "pending"
     });
@@ -80,30 +89,36 @@ export default function Dashboard() {
       setSuccessMsg("Pago reportado. El admin verificará tus créditos pronto.");
       setAmountBs("");
       setRefNumber("");
-      fetchData(); // Refresh list
+      fetchData();
     }
   };
 
   const handleWithdrawSubmit = async () => {
     if (!withdrawAmount) return;
     const amountCredits = parseInt(withdrawAmount);
-    
+
     if (amountCredits > balance) {
       alert("No tienes suficientes créditos.");
       return;
     }
-    
+
     if (!profile?.phone_number) {
       alert("Por favor configura tus datos bancarios en el Perfil antes de retirar.");
       return;
     }
 
+    // Siempre obtener el user.id fresco de la sesión activa
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) {
+      alert("Sesión expirada. Por favor inicia sesión nuevamente.");
+      return;
+    }
+
     setIsSubmitting(true);
-    // Convert Credits to BS (Example rate: 1000 Credits = 100 BS)
     const bsAmount = amountCredits / 10;
 
     const { error } = await supabase.from("transactions").insert({
-      user_id: user.id,
+      user_id: currentUser.id,
       type: "withdrawal",
       amount_credits: amountCredits,
       amount_bs: bsAmount,
@@ -272,7 +287,7 @@ export default function Dashboard() {
 
             <button 
               onClick={handleRechargeSubmit}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !user}
               className="w-full py-4 bg-[#ff007a] hover:bg-[#ff007a]/80 disabled:opacity-50 text-white rounded-xl font-bold transition-colors glow-primary mt-4 flex items-center justify-center gap-2"
             >
               {isSubmitting && <Loader2 className="animate-spin" size={18} />}
