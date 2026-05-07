@@ -69,7 +69,6 @@ export default function Dashboard() {
       amount_credits: amountCredits,
       amount_bs: parseFloat(amountBs),
       reference_number: refNumber,
-      bank_name: "Banesco (Pago Móvil VIVO BATTLE)",
       status: "pending"
     });
 
@@ -108,7 +107,6 @@ export default function Dashboard() {
       type: "withdrawal",
       amount_credits: amountCredits,
       amount_bs: bsAmount,
-      bank_name: `${profile.bank_name} - ${profile.id_card} - ${profile.phone_number}`,
       status: "pending"
     });
 
