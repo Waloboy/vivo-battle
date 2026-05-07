@@ -297,3 +297,4 @@ export default function Dashboard() {
     </div>
   );
 }
+// Fix Diseño 2
