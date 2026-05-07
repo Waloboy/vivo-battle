@@ -5,6 +5,12 @@ CREATE TABLE public.profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
   avatar_url TEXT,
+  role TEXT DEFAULT 'user' NOT NULL,
+  full_name TEXT,
+  city TEXT,
+  bank_name TEXT,
+  bank_account_type TEXT,
+  bank_account_number TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -17,16 +23,18 @@ CREATE TABLE public.wallets (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 3. Transactions (Recharges via Pago Móvil)
+-- 3. Transactions (Recharges & Withdrawals)
 CREATE TYPE transaction_status AS ENUM ('pending', 'approved', 'rejected');
+CREATE TYPE transaction_type AS ENUM ('deposit', 'withdrawal');
 
 CREATE TABLE public.transactions (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  type transaction_type DEFAULT 'deposit' NOT NULL,
   amount_credits INTEGER NOT NULL,
   amount_bs DECIMAL(10,2) NOT NULL,
-  reference_number TEXT NOT NULL,
-  bank_name TEXT NOT NULL,
+  reference_number TEXT,
+  bank_name TEXT,
   status transaction_status DEFAULT 'pending' NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   resolved_at TIMESTAMP WITH TIME ZONE

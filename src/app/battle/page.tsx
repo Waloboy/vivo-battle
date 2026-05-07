@@ -2,9 +2,17 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, Star, Zap, Flame } from "lucide-react";
+import { Heart, Star, Zap, Flame, Send } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
 
 export default function BattleView() {
+  const supabase = createClient();
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   const [scoreA, setScoreA] = useState(5000);
   const [scoreB, setScoreB] = useState(5000);
   const [particlesA, setParticlesA] = useState<{ id: number; x: number; y: number }[]>([]);
@@ -12,23 +20,68 @@ export default function BattleView() {
   
   const totalScore = scoreA + scoreB;
   const percentA = (scoreA / totalScore) * 100;
-  
-  const handleGiftA = (amount: number) => {
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUser(user);
+        const { data: profile } = await supabase.from('profiles').select('username').eq('id', user.id).single();
+        if (profile) setProfile(profile);
+      }
+    };
+    fetchUser();
+
+    const channel = supabase.channel('battle-room')
+      .on('broadcast', { event: 'chat' }, payload => {
+        setMessages(prev => [...prev, payload.payload]);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const sendMessage = async (text: string, isGift: boolean = false) => {
+    if (!text.trim() || !profile) return;
+    const msg = {
+      id: Date.now(),
+      username: profile.username,
+      text,
+      isGift
+    };
+    await supabase.channel('battle-room').send({
+      type: 'broadcast',
+      event: 'chat',
+      payload: msg
+    });
+    setMessages(prev => [...prev, msg]);
+    if (!isGift) setNewMessage("");
+  };
+
+  const handleGiftA = (amount: number, giftName: string) => {
     setScoreA(prev => prev + amount);
     const newParticle = { id: Date.now(), x: Math.random() * 100, y: Math.random() * 100 };
     setParticlesA(prev => [...prev, newParticle]);
     setTimeout(() => {
       setParticlesA(prev => prev.filter(p => p.id !== newParticle.id));
     }, 1000);
+    sendMessage(`envió un ${giftName}! 🎁`, true);
   };
 
-  const handleGiftB = (amount: number) => {
+  const handleGiftB = (amount: number, giftName: string) => {
     setScoreB(prev => prev + amount);
     const newParticle = { id: Date.now(), x: Math.random() * 100, y: Math.random() * 100 };
     setParticlesB(prev => [...prev, newParticle]);
     setTimeout(() => {
       setParticlesB(prev => prev.filter(p => p.id !== newParticle.id));
     }, 1000);
+    sendMessage(`envió un ${giftName}! 🎁`, true);
   };
 
   return (
@@ -86,11 +139,11 @@ export default function BattleView() {
           </AnimatePresence>
 
           <div className="mt-auto relative z-20 p-4 grid grid-cols-2 gap-2">
-            <button onClick={() => handleGiftA(100)} className="bg-[#ff007a]/20 hover:bg-[#ff007a]/40 border border-[#ff007a]/50 rounded-xl p-3 flex flex-col items-center justify-center transition-colors backdrop-blur-md">
+            <button onClick={() => handleGiftA(100, "Rosa")} className="bg-[#ff007a]/20 hover:bg-[#ff007a]/40 border border-[#ff007a]/50 rounded-xl p-3 flex flex-col items-center justify-center transition-colors backdrop-blur-md">
               <Heart size={24} className="text-[#ff007a] mb-1" />
               <span className="text-xs font-bold">Rosa (100)</span>
             </button>
-            <button onClick={() => handleGiftA(1000)} className="bg-[#ff007a] hover:bg-[#ff007a]/80 text-white rounded-xl p-3 flex flex-col items-center justify-center transition-colors shadow-[0_0_15px_rgba(255,0,122,0.5)]">
+            <button onClick={() => handleGiftA(1000, "Fuego")} className="bg-[#ff007a] hover:bg-[#ff007a]/80 text-white rounded-xl p-3 flex flex-col items-center justify-center transition-colors shadow-[0_0_15px_rgba(255,0,122,0.5)]">
               <Flame size={24} className="mb-1" />
               <span className="text-xs font-bold">Fuego (1k)</span>
             </button>
@@ -126,17 +179,56 @@ export default function BattleView() {
           </AnimatePresence>
 
           <div className="mt-auto relative z-20 p-4 grid grid-cols-2 gap-2">
-            <button onClick={() => handleGiftB(100)} className="bg-[#00d1ff]/20 hover:bg-[#00d1ff]/40 border border-[#00d1ff]/50 rounded-xl p-3 flex flex-col items-center justify-center transition-colors backdrop-blur-md">
+            <button onClick={() => handleGiftB(100, "Estrella")} className="bg-[#00d1ff]/20 hover:bg-[#00d1ff]/40 border border-[#00d1ff]/50 rounded-xl p-3 flex flex-col items-center justify-center transition-colors backdrop-blur-md">
               <Star size={24} className="text-[#00d1ff] mb-1" />
               <span className="text-xs font-bold">Estrella (100)</span>
             </button>
-            <button onClick={() => handleGiftB(1000)} className="bg-[#00d1ff] hover:bg-[#00d1ff]/80 text-black rounded-xl p-3 flex flex-col items-center justify-center transition-colors shadow-[0_0_15px_rgba(0,209,255,0.5)]">
+            <button onClick={() => handleGiftB(1000, "Rayo")} className="bg-[#00d1ff] hover:bg-[#00d1ff]/80 text-black rounded-xl p-3 flex flex-col items-center justify-center transition-colors shadow-[0_0_15px_rgba(0,209,255,0.5)]">
               <Zap size={24} className="mb-1" />
               <span className="text-xs font-bold">Rayo (1k)</span>
             </button>
           </div>
         </div>
 
+      </div>
+
+      {/* Real-time Chat Section */}
+      <div className="mt-6 h-64 cyber-glass rounded-3xl p-4 flex flex-col border-white/10 relative overflow-hidden flex-shrink-0">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-[#ff007a] rounded-full mix-blend-screen filter blur-[60px] opacity-10" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#00d1ff] rounded-full mix-blend-screen filter blur-[60px] opacity-10" />
+        
+        <div className="flex-1 overflow-y-auto space-y-3 mb-4 z-10 custom-scrollbar pr-2 flex flex-col">
+          {messages.length === 0 && (
+            <div className="text-white/30 text-sm text-center mt-auto mb-4">
+              ¡Sé el primero en enviar un mensaje!
+            </div>
+          )}
+          {messages.map(msg => (
+            <div key={msg.id} className={`text-sm py-2 px-3 rounded-xl w-max max-w-[90%] ${msg.isGift ? 'bg-[#ff007a]/20 border border-[#ff007a]/30 shadow-[0_0_15px_rgba(255,0,122,0.2)]' : 'bg-black/40 border border-white/5'} cyber-glass flex gap-2 items-start`}>
+              <span className={`font-bold whitespace-nowrap ${msg.isGift ? 'text-[#ff007a]' : 'text-[#00d1ff]'}`}>@{msg.username}</span>
+              <span className={`break-words ${msg.isGift ? 'text-white font-medium italic' : 'text-white/90'}`}>{msg.text}</span>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+        
+        <div className="flex gap-2 z-10">
+          <input 
+            type="text" 
+            value={newMessage}
+            onChange={e => setNewMessage(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && sendMessage(newMessage)}
+            placeholder="Comenta o apoya a tu favorito..."
+            className="flex-1 bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
+          />
+          <button 
+            onClick={() => sendMessage(newMessage)}
+            disabled={!newMessage.trim()}
+            className="bg-[#00d1ff] disabled:opacity-50 text-black px-5 py-2 rounded-xl font-bold hover:bg-[#00d1ff]/80 transition-colors flex items-center justify-center"
+          >
+            <Send size={18} />
+          </button>
+        </div>
       </div>
     </div>
   );

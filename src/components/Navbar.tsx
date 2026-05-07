@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Swords, User, Wallet, LogOut } from "lucide-react";
+import { Swords, User, Wallet, LogOut, ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 
 export function Navbar() {
   const [user, setUser] = useState<any>(null);
+  const [role, setRole] = useState<string>("user");
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -15,20 +16,41 @@ export function Navbar() {
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser();
-      setUser(data.user);
+      if (data.user) {
+        setUser(data.user);
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .single();
+        if (profile) setRole(profile.role);
+      } else {
+        setUser(null);
+      }
     };
     checkUser();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user ?? null);
+      async (event, session) => {
+        if (session?.user) {
+          setUser(session.user);
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", session.user.id)
+            .single();
+          if (profile) setRole(profile.role);
+        } else {
+          setUser(null);
+          setRole("user");
+        }
       }
     );
 
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, [supabase.auth]);
+  }, [supabase]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -51,7 +73,7 @@ export function Navbar() {
         </Link>
         
         {user && (
-          <div className="flex items-center gap-6 text-sm font-medium">
+          <div className="flex items-center gap-4 md:gap-6 text-sm font-medium">
             <Link 
               href="/battle" 
               className={`flex items-center gap-2 transition-colors ${pathname === '/battle' ? 'text-white' : 'text-white/50 hover:text-white'}`}
@@ -67,14 +89,24 @@ export function Navbar() {
               <span className="hidden sm:block">Billetera</span>
             </Link>
             <Link 
-              href="/admin" 
-              className={`flex items-center gap-2 transition-colors ${pathname === '/admin' ? 'text-[#ff007a]' : 'text-white/50 hover:text-[#ff007a]'}`}
+              href="/profile" 
+              className={`flex items-center gap-2 transition-colors ${pathname === '/profile' ? 'text-[#ff007a]' : 'text-white/50 hover:text-[#ff007a]'}`}
             >
               <User size={18} />
               <span className="hidden sm:block">Perfil</span>
             </Link>
             
-            <div className="w-px h-6 bg-white/10 mx-2"></div>
+            {role === "admin" && (
+              <Link 
+                href="/admin" 
+                className={`flex items-center gap-2 transition-colors ${pathname === '/admin' ? 'text-yellow-400' : 'text-white/50 hover:text-yellow-400'}`}
+              >
+                <ShieldAlert size={18} />
+                <span className="hidden sm:block">Admin</span>
+              </Link>
+            )}
+            
+            <div className="w-px h-6 bg-white/10 mx-1 md:mx-2"></div>
             
             <button 
               onClick={handleLogout}
