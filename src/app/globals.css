@@ -35,3 +35,8 @@
     box-shadow: 0 0 20px var(--color-secondary-glow), inset 0 0 10px var(--color-secondary-glow);
   }
 }
+
+@keyframes sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(500%); }
+}

@@ -26,7 +26,9 @@ CREATE TABLE public.wallets (
 
 -- 3. Transactions (Recharges & Withdrawals)
 CREATE TYPE transaction_status AS ENUM ('pending', 'approved', 'rejected');
-CREATE TYPE transaction_type AS ENUM ('deposit', 'withdrawal');
+CREATE TYPE transaction_type AS ENUM ('deposit', 'withdrawal', 'gift');
+-- MIGRATION (run in Supabase SQL Editor if table already exists):
+-- ALTER TYPE transaction_type ADD VALUE 'gift';
 
 CREATE TABLE public.transactions (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,

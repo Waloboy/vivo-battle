@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Wallet, Plus, ArrowUpRight, History, CreditCard, Landmark, Phone, Loader2, CheckCircle2 } from "lucide-react";
+import { Wallet, Plus, ArrowUpRight, History, CreditCard, Landmark, Phone, Loader2, CheckCircle2, Sparkles } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { createClient } from "@/utils/supabase/client";
 
@@ -211,18 +211,30 @@ export default function Dashboard() {
             transactions.map((txn, i) => (
               <div key={txn.id} className="flex items-center justify-between p-4 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
                 <div className="flex items-center gap-4">
-                  <div className={`p-2 rounded-lg ${txn.type === 'withdrawal' ? 'bg-white/10 text-white' : 'bg-[#00d1ff]/10 text-[#00d1ff]'}`}>
-                    {txn.type === 'withdrawal' ? <ArrowUpRight size={20} /> : <Plus size={20} />}
+                  <div className={`p-2 rounded-lg ${
+                    txn.type === 'gift' ? 'bg-[#e056fd]/10 text-[#e056fd]' :
+                    txn.type === 'withdrawal' ? 'bg-white/10 text-white' :
+                    'bg-[#00d1ff]/10 text-[#00d1ff]'
+                  }`}>
+                    {txn.type === 'gift' ? <Sparkles size={20} /> : txn.type === 'withdrawal' ? <ArrowUpRight size={20} /> : <Plus size={20} />}
                   </div>
                   <div>
-                    <p className="font-medium">{txn.type === 'withdrawal' ? 'Retiro de Ganancias' : 'Recarga vía Pago Móvil'}</p>
+                    <p className="font-medium">
+                      {txn.type === 'gift' ? (txn.reference_number || 'Gift') :
+                       txn.type === 'withdrawal' ? 'Retiro de Ganancias' :
+                       'Recarga vía Pago Móvil'}
+                    </p>
                     <p className="text-xs text-white/40">
                       {new Date(txn.created_at).toLocaleDateString()} • {txn.status === 'pending' ? 'Pendiente' : txn.status === 'approved' ? 'Aprobado' : 'Rechazado'}
                     </p>
                   </div>
                 </div>
-                <div className={`font-bold ${txn.type === 'withdrawal' ? 'text-white' : 'text-[#00d1ff]'}`}>
-                  {txn.type === 'withdrawal' ? '-' : '+'}{txn.amount_credits} <span className="text-xs font-normal opacity-50">CR</span>
+                <div className={`font-bold ${
+                  txn.type === 'gift' ? 'text-[#e056fd]' :
+                  txn.type === 'withdrawal' ? 'text-white' :
+                  'text-[#00d1ff]'
+                }`}>
+                  {txn.type === 'withdrawal' || txn.type === 'gift' ? '-' : '+'}{txn.amount_credits} <span className="text-xs font-normal opacity-50">CR</span>
                 </div>
               </div>
             ))

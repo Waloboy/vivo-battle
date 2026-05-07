@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle2, XCircle, Clock, Loader2, RefreshCw, ShieldAlert, Wallet } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Loader2, RefreshCw, ShieldAlert, Sparkles } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
 export default function AdminDashboard() {
@@ -120,6 +120,9 @@ export default function AdminDashboard() {
   const totalApprovedBs = transactions
     .filter((t) => t.status === "approved" && t.type === "deposit")
     .reduce((sum, t) => sum + parseFloat(t.amount_bs || 0), 0);
+  const totalGiftsCr = transactions
+    .filter((t) => t.type === "gift")
+    .reduce((sum, t) => sum + (t.amount_credits || 0), 0);
 
   return (
     <div className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto space-y-8">
@@ -138,6 +141,10 @@ export default function AdminDashboard() {
           <div className="cyber-glass px-4 py-2 rounded-xl text-center border-white/10">
             <span className="block text-white/50 text-xs uppercase tracking-wider">Total Hoy (BS)</span>
             <span className="text-xl font-bold text-[#ff007a]">{totalApprovedBs.toFixed(2)}</span>
+          </div>
+          <div className="cyber-glass px-4 py-2 rounded-xl text-center border-white/10">
+            <span className="block text-white/50 text-xs uppercase tracking-wider">Gifts (CR)</span>
+            <span className="text-xl font-bold text-[#e056fd]">{totalGiftsCr.toLocaleString()}</span>
           </div>
           <button
             onClick={fetchTransactions}
@@ -186,10 +193,12 @@ export default function AdminDashboard() {
                       <td className="p-4">
                         <span
                           className={`text-xs font-bold uppercase tracking-wider ${
-                            txn.type === "deposit" ? "text-[#00d1ff]" : "text-white/60"
+                            txn.type === "deposit" ? "text-[#00d1ff]" :
+                            txn.type === "gift"    ? "text-[#e056fd]" :
+                            "text-white/60"
                           }`}
                         >
-                          {txn.type === "deposit" ? "Recarga" : "Retiro"}
+                          {txn.type === "deposit" ? "Recarga" : txn.type === "gift" ? "Gift" : "Retiro"}
                         </span>
                       </td>
 
@@ -251,7 +260,11 @@ export default function AdminDashboard() {
 
                       {/* Acciones */}
                       <td className="p-4 text-right">
-                        {txn.status === "pending" ? (
+                        {txn.type === "gift" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[#e056fd]/10 text-[#e056fd] border border-[#e056fd]/20 text-[10px] font-bold">
+                            <Sparkles size={10} /> Auto
+                          </span>
+                        ) : txn.status === "pending" ? (
                           <div className="flex items-center justify-end gap-2">
                             {isProcessing ? (
                               <Loader2 className="animate-spin text-white/50" size={20} />
