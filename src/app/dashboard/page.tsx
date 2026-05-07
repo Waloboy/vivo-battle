@@ -94,7 +94,7 @@ export default function Dashboard() {
       return;
     }
     
-    if (!profile?.bank_account_number) {
+    if (!profile?.phone_number) {
       alert("Por favor configura tus datos bancarios en el Perfil antes de retirar.");
       return;
     }
@@ -108,7 +108,7 @@ export default function Dashboard() {
       type: "withdrawal",
       amount_credits: amountCredits,
       amount_bs: bsAmount,
-      bank_name: `${profile.bank_name} - ${profile.bank_account_type} - ${profile.bank_account_number}`,
+      bank_name: `${profile.bank_name} - ${profile.id_card} - ${profile.phone_number}`,
       status: "pending"
     });
 
@@ -300,7 +300,7 @@ export default function Dashboard() {
               Ingresa la cantidad de créditos que deseas retirar. Lo enviaremos a tus datos bancarios registrados en el perfil.
             </div>
 
-            {!profile?.bank_account_number ? (
+            {!profile?.phone_number ? (
                <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm">
                  Debes configurar tus datos bancarios en la sección Perfil antes de poder retirar.
                </div>
@@ -309,7 +309,7 @@ export default function Dashboard() {
                 <div className="flex flex-col p-3 bg-black/30 rounded-lg border border-white/5 text-sm">
                   <span className="text-white/50 text-xs uppercase mb-1">Tus datos receptores</span>
                   <span className="font-medium">{profile.bank_name}</span>
-                  <span className="font-medium">{profile.bank_account_type} - {profile.bank_account_number}</span>
+                  <span className="font-medium">{profile.id_card} - {profile.phone_number}</span>
                   <span className="font-medium text-white/70">{profile.full_name}</span>
                 </div>
               </div>
@@ -329,7 +329,7 @@ export default function Dashboard() {
 
             <button 
               onClick={handleWithdrawSubmit}
-              disabled={isSubmitting || !profile?.bank_account_number}
+              disabled={isSubmitting || !profile?.phone_number}
               className="w-full py-4 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white rounded-xl font-bold transition-colors mt-4 flex items-center justify-center gap-2"
             >
               {isSubmitting && <Loader2 className="animate-spin" size={18} />}
