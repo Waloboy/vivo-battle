@@ -11,6 +11,9 @@ CREATE TABLE public.profiles (
   bank_name TEXT,
   bank_account_type TEXT,
   bank_account_number TEXT,
+  bank_cedula TEXT,
+  bank_phone TEXT,
+  last_username_change TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

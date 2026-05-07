@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { User, MapPin, Building2, CreditCard, Hash, Loader2, Save, CheckCircle2 } from "lucide-react";
+import { User, MapPin, Building2, CreditCard, Hash, Loader2, Save, CheckCircle2, Phone, FileText } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
 export default function ProfilePage() {
@@ -9,6 +9,11 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  
+  const [originalUsername, setOriginalUsername] = useState("");
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
+  const [daysUntilChange, setDaysUntilChange] = useState<number | null>(null);
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -19,28 +24,82 @@ export default function ProfilePage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-      if (data) setProfile(data);
+      if (data) {
+        setProfile(data);
+        setOriginalUsername(data.username);
+        if (data.last_username_change) {
+          const lastChange = new Date(data.last_username_change);
+          const diffTime = Math.abs(new Date().getTime() - lastChange.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          if (diffDays < 15) {
+            setDaysUntilChange(15 - diffDays);
+          }
+        }
+      }
     }
     setLoading(false);
   };
 
+  useEffect(() => {
+    if (!profile || profile.username === originalUsername) {
+      setUsernameStatus("idle");
+      return;
+    }
+
+    const checkUsername = async () => {
+      setUsernameStatus("checking");
+      const { data } = await supabase.from("profiles").select("id").eq("username", profile.username).single();
+      if (data) {
+        setUsernameStatus("taken");
+      } else {
+        setUsernameStatus("available");
+      }
+    };
+
+    const debounce = setTimeout(checkUsername, 500);
+    return () => clearTimeout(debounce);
+  }, [profile?.username, originalUsername, supabase]);
+
   const handleSave = async () => {
+    if (daysUntilChange !== null && profile.username !== originalUsername) {
+      setSaveMessage("No puedes cambiar tu username aún.");
+      return;
+    }
+    if (usernameStatus === "taken") {
+      setSaveMessage("El username ya está en uso.");
+      return;
+    }
+
     setIsSaving(true);
     setSaveMessage("");
     const { data: { user } } = await supabase.auth.getUser();
     if (user && profile) {
-      const { error } = await supabase.from("profiles").update({
+      const updates: any = {
         full_name: profile.full_name,
         city: profile.city,
         bank_name: profile.bank_name,
         bank_account_type: profile.bank_account_type,
-        bank_account_number: profile.bank_account_number
-      }).eq("id", user.id);
+        bank_account_number: profile.bank_account_number,
+        bank_cedula: profile.bank_cedula,
+        bank_phone: profile.bank_phone
+      };
+
+      if (profile.username !== originalUsername) {
+        updates.username = profile.username;
+        updates.last_username_change = new Date().toISOString();
+      }
+
+      const { error } = await supabase.from("profiles").update(updates).eq("id", user.id);
 
       if (error) {
         setSaveMessage("Error al guardar: " + error.message);
       } else {
         setSaveMessage("¡Perfil guardado con éxito!");
+        if (profile.username !== originalUsername) {
+          setOriginalUsername(profile.username);
+          setDaysUntilChange(15);
+          setUsernameStatus("idle");
+        }
         setTimeout(() => setSaveMessage(""), 3000);
       }
     }
@@ -67,6 +126,28 @@ export default function ProfilePage() {
           </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">Username</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 font-bold">@</span>
+                <input
+                  type="text"
+                  value={profile?.username || ""}
+                  onChange={(e) => setProfile({...profile, username: e.target.value.replace(/\s/g, '').toLowerCase()})}
+                  disabled={daysUntilChange !== null}
+                  placeholder="tu_usuario"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-9 pr-12 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#ff007a] transition-colors disabled:opacity-50"
+                />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  {usernameStatus === "checking" && <Loader2 className="animate-spin text-white/50" size={16} />}
+                  {usernameStatus === "available" && <CheckCircle2 className="text-emerald-500" size={16} />}
+                  {usernameStatus === "taken" && <span className="text-red-500 text-xs font-bold">En uso</span>}
+                </div>
+              </div>
+              {daysUntilChange !== null && (
+                <p className="text-xs text-red-400 mt-1">Podrás cambiar tu nombre de usuario nuevamente en {daysUntilChange} días.</p>
+              )}
+            </div>
             <div>
               <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">Nombre Completo</label>
               <div className="relative">
@@ -117,6 +198,33 @@ export default function ProfilePage() {
                   placeholder="Ej. Mercantil"
                   className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
                 />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">Cédula de Identidad</label>
+                <div className="relative">
+                  <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
+                  <input
+                    type="text"
+                    value={profile?.bank_cedula || ""}
+                    onChange={(e) => setProfile({...profile, bank_cedula: e.target.value})}
+                    placeholder="V-12345678"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">Número de Teléfono (Pago Móvil)</label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
+                  <input
+                    type="text"
+                    value={profile?.bank_phone || ""}
+                    onChange={(e) => setProfile({...profile, bank_phone: e.target.value})}
+                    placeholder="0414-1234567"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
+                  />
+                </div>
               </div>
             </div>
             
