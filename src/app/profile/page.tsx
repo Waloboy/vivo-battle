@@ -198,6 +198,8 @@ export default function ProfilePage() {
                   placeholder="Ej. Mercantil"
                   className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
                 />
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">Cédula de Identidad</label>
