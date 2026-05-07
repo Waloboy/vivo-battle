@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { User, MapPin, Building2, CreditCard, Hash, Loader2, Save, CheckCircle2, Phone, FileText } from "lucide-react";
+import { User, MapPin, Building2, Loader2, Save, CheckCircle2, Phone, FileText } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
 export default function ProfilePage() {
@@ -78,10 +78,8 @@ export default function ProfilePage() {
         full_name: profile.full_name,
         city: profile.city,
         bank_name: profile.bank_name,
-        bank_account_type: profile.bank_account_type,
-        bank_account_number: profile.bank_account_number,
-        bank_cedula: profile.bank_cedula,
-        bank_phone: profile.bank_phone
+        id_card: profile.id_card,
+        phone_number: profile.phone_number
       };
 
       if (profile.username !== originalUsername) {
@@ -207,8 +205,8 @@ export default function ProfilePage() {
                   <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
                   <input
                     type="text"
-                    value={profile?.bank_cedula || ""}
-                    onChange={(e) => setProfile({...profile, bank_cedula: e.target.value})}
+                    value={profile?.id_card || ""}
+                    onChange={(e) => setProfile({...profile, id_card: e.target.value})}
                     placeholder="V-12345678"
                     className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
                   />
@@ -221,42 +219,9 @@ export default function ProfilePage() {
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
                   <input
                     type="text"
-                    value={profile?.bank_phone || ""}
-                    onChange={(e) => setProfile({...profile, bank_phone: e.target.value})}
+                    value={profile?.phone_number || ""}
+                    onChange={(e) => setProfile({...profile, phone_number: e.target.value})}
                     placeholder="0414-1234567"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
-                  />
-                </div>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">Tipo de Cuenta</label>
-                <div className="relative">
-                  <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
-                  <select
-                    value={profile?.bank_account_type || ""}
-                    onChange={(e) => setProfile({...profile, bank_account_type: e.target.value})}
-                    className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-[#00d1ff] transition-colors appearance-none"
-                  >
-                    <option value="" disabled>Selecciona tipo</option>
-                    <option value="Corriente">Corriente</option>
-                    <option value="Ahorro">Ahorro</option>
-                  </select>
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">Número de Cuenta</label>
-                <div className="relative">
-                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
-                  <input
-                    type="text"
-                    value={profile?.bank_account_number || ""}
-                    onChange={(e) => setProfile({...profile, bank_account_number: e.target.value.replace(/\D/g, '')})}
-                    placeholder="0105xxxxxxxxxxxxxxx"
-                    maxLength={20}
                     className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
                   />
                 </div>
