@@ -1,10 +1,56 @@
 "use client";
 
-import { motion } from "framer-motion";
-import Link from "next/link";
-import { Zap, Shield, Flame } from "lucide-react";
+import { useState } from "react";
+import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
+import { Swords, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
-export default function Home() {
+export default function AuthPage() {
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  const supabase = createClient();
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (isLogin) {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        router.push("/dashboard");
+      } else {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              username,
+            },
+          },
+        });
+        if (error) throw error;
+        // Supabase might require email confirmation, but assuming auto-login for now
+        router.push("/dashboard");
+      }
+    } catch (err: any) {
+      setError(err.message || "Ocurrió un error.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden">
       {/* Background glow effects */}
@@ -14,62 +60,100 @@ export default function Home() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8 }}
-        className="z-10 text-center space-y-8 max-w-3xl"
+        className="w-full max-w-md z-10"
       >
-        <div className="space-y-4">
-          <motion.div
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 10 }}
-          >
-            <h1 className="text-7xl md:text-9xl font-black tracking-tighter text-gradient pb-2">
-              VIVO BATTLE
-            </h1>
-          </motion.div>
-          <p className="text-xl md:text-2xl text-white/60 font-light tracking-wide">
-            La plataforma definitiva de batallas 1vs1.
-          </p>
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center p-4 rounded-2xl bg-gradient-to-br from-[#ff007a] to-[#00d1ff] mb-4 opacity-90">
+            <Swords size={48} className="text-white" />
+          </div>
+          <h1 className="text-4xl font-black tracking-tighter text-gradient">VIVO BATTLE</h1>
+          <p className="text-white/60 mt-2">La app de batallas 1vs1</p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
-          <Link href="/battle" className="group relative w-full sm:w-auto">
-            <div className="absolute -inset-1 bg-gradient-to-r from-[#ff007a] to-[#00d1ff] rounded-xl blur opacity-25 group-hover:opacity-75 transition duration-500"></div>
-            <button className="relative w-full px-8 py-4 bg-black rounded-xl cyber-glass flex items-center justify-center gap-3 text-lg font-bold cyber-glass-hover">
-              <Flame className="text-[#ff007a]" />
-              <span>Ver Batallas en Vivo</span>
-            </button>
-          </Link>
+        <div className="cyber-glass p-8 rounded-3xl border-white/10 shadow-2xl relative overflow-hidden">
+          <div className={`absolute top-0 left-0 w-full h-1 ${isLogin ? 'bg-[#00d1ff]' : 'bg-[#ff007a]'}`} />
           
-          <Link href="/dashboard" className="w-full sm:w-auto">
-            <button className="w-full px-8 py-4 rounded-xl cyber-glass flex items-center justify-center gap-3 text-lg font-bold text-white/80 cyber-glass-hover hover:text-white">
-              <Zap className="text-[#00d1ff]" />
-              <span>Mi Billetera</span>
-            </button>
-          </Link>
-        </div>
+          <h2 className="text-2xl font-bold mb-6 text-center">
+            {isLogin ? "Iniciar Sesión" : "Crear Cuenta"}
+          </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-20 text-left">
-          <div className="cyber-glass p-6 rounded-2xl">
-            <div className="h-12 w-12 rounded-full bg-[#ff007a]/10 flex items-center justify-center mb-4">
-              <Flame className="text-[#ff007a]" size={24} />
+          <AnimatePresence mode="wait">
+            {error && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm mb-6 text-center"
+              >
+                {error}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <form onSubmit={handleAuth} className="space-y-4">
+            {!isLogin && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+              >
+                <label className="block text-sm font-medium text-white/70 mb-1">Usuario Único</label>
+                <input
+                  type="text"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#ff007a] transition-colors"
+                  placeholder="@tu_usuario"
+                />
+              </motion.div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-white/70 mb-1">Correo Electrónico</label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
+                placeholder="correo@ejemplo.com"
+              />
             </div>
-            <h3 className="text-xl font-bold mb-2">Batallas Épicas</h3>
-            <p className="text-white/50 text-sm">Apoya a tus creadores favoritos en tiempo real y decide quién gana.</p>
-          </div>
-          <div className="cyber-glass p-6 rounded-2xl">
-            <div className="h-12 w-12 rounded-full bg-[#00d1ff]/10 flex items-center justify-center mb-4">
-              <Shield className="text-[#00d1ff]" size={24} />
+            <div>
+              <label className="block text-sm font-medium text-white/70 mb-1">Contraseña</label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
+                placeholder="••••••••"
+              />
             </div>
-            <h3 className="text-xl font-bold mb-2">100% Seguro</h3>
-            <p className="text-white/50 text-sm">Transacciones protegidas y verificadas al instante vía Pago Móvil.</p>
-          </div>
-          <div className="cyber-glass p-6 rounded-2xl">
-            <div className="h-12 w-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-              <Zap className="text-white" size={24} />
-            </div>
-            <h3 className="text-xl font-bold mb-2">Premios Instantáneos</h3>
-            <p className="text-white/50 text-sm">Los creadores reciben sus ganancias directamente en sus cuentas.</p>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 mt-6 transition-all ${
+                isLogin 
+                  ? 'bg-[#00d1ff] hover:bg-[#00d1ff]/80 text-black glow-secondary' 
+                  : 'bg-[#ff007a] hover:bg-[#ff007a]/80 text-white glow-primary'
+              }`}
+            >
+              {loading && <Loader2 className="animate-spin" size={20} />}
+              {isLogin ? "Entrar a la Batalla" : "Registrarse Ahora"}
+            </button>
+          </form>
+
+          <div className="mt-6 text-center text-sm text-white/50">
+            {isLogin ? "¿No tienes cuenta?" : "¿Ya eres batallador?"}{" "}
+            <button
+              type="button"
+              onClick={() => setIsLogin(!isLogin)}
+              className="text-white hover:text-[#00d1ff] font-bold transition-colors"
+            >
+              {isLogin ? "Regístrate aquí" : "Inicia sesión"}
+            </button>
           </div>
         </div>
       </motion.div>

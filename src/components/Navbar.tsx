@@ -1,0 +1,90 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { Swords, User, Wallet, LogOut } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/utils/supabase/client";
+
+export function Navbar() {
+  const [user, setUser] = useState<any>(null);
+  const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user);
+    };
+    checkUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [supabase.auth]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/");
+  };
+
+  // Don't show navbar on the login page if not logged in
+  if (pathname === "/" && !user) return null;
+
+  return (
+    <nav className="border-b border-white/10 bg-black/50 backdrop-blur-md sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+        <Link href={user ? "/dashboard" : "/"} className="flex items-center gap-2 group">
+          <div className="p-2 rounded-lg bg-gradient-to-br from-[#ff007a] to-[#00d1ff] opacity-80 group-hover:opacity-100 transition-opacity">
+            <Swords size={20} className="text-white" />
+          </div>
+          <span className="font-black text-xl tracking-tight text-gradient hidden sm:block">
+            VIVO BATTLE
+          </span>
+        </Link>
+        
+        {user && (
+          <div className="flex items-center gap-6 text-sm font-medium">
+            <Link 
+              href="/battle" 
+              className={`flex items-center gap-2 transition-colors ${pathname === '/battle' ? 'text-white' : 'text-white/50 hover:text-white'}`}
+            >
+              <Swords size={18} />
+              <span className="hidden sm:block">Batallas</span>
+            </Link>
+            <Link 
+              href="/dashboard" 
+              className={`flex items-center gap-2 transition-colors ${pathname === '/dashboard' ? 'text-[#00d1ff]' : 'text-white/50 hover:text-[#00d1ff]'}`}
+            >
+              <Wallet size={18} />
+              <span className="hidden sm:block">Billetera</span>
+            </Link>
+            <Link 
+              href="/admin" 
+              className={`flex items-center gap-2 transition-colors ${pathname === '/admin' ? 'text-[#ff007a]' : 'text-white/50 hover:text-[#ff007a]'}`}
+            >
+              <User size={18} />
+              <span className="hidden sm:block">Perfil</span>
+            </Link>
+            
+            <div className="w-px h-6 bg-white/10 mx-2"></div>
+            
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 text-red-500/80 hover:text-red-500 transition-colors"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        )}
+      </div>
+    </nav>
+  );
+}

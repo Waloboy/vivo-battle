@@ -69,3 +69,31 @@ CREATE POLICY "Users can view own transactions."
   ON public.transactions FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own transactions."
   ON public.transactions FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- ==========================================
+-- TRIGGERS FOR NEW USERS
+-- ==========================================
+-- Creates a profile and a wallet when a new user signs up
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  -- Insert profile using the metadata "username"
+  INSERT INTO public.profiles (id, username, avatar_url)
+  VALUES (
+    new.id, 
+    new.raw_user_meta_data->>'username',
+    new.raw_user_meta_data->>'avatar_url'
+  );
+
+  -- Insert wallet initialized at 0
+  INSERT INTO public.wallets (user_id, balance)
+  VALUES (new.id, 0);
+
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
