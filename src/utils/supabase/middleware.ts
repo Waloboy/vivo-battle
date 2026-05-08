@@ -27,17 +27,15 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Do not run code between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-  // issues with cross-request state pollution.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  const protectedRoutes = ['/dashboard', '/battle', '/admin', '/profile']
-  const isProtectedRoute = protectedRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
-
-  // Allow component to handle no-user state (emergency fix)
+  // Wrap in try-catch: if token refresh fails (400), let the request pass through
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data?.user ?? null
+  } catch (e) {
+    // Stale token or network error — let the component handle auth
+    console.warn('[Middleware] getUser failed, passing through:', e)
+  }
 
   // If user is signed in and visits the root page, redirect to dashboard
   if (request.nextUrl.pathname === '/' && user) {
