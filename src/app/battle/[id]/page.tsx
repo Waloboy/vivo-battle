@@ -11,36 +11,66 @@ import { useAnimatedCount } from "../useAnimatedCount";
 import { getUserBalance } from "@/utils/balance";
 import { fmtCR } from "@/utils/format";
 
-import { LiveKitRoom, VideoTrack, useTracks, useLocalParticipant } from '@livekit/components-react';
+import { LiveKitRoom, VideoTrack, useTracks, useLocalParticipant, useParticipants } from '@livekit/components-react';
 import { Track } from 'livekit-client';
 import '@livekit/components-styles';
 
 interface FloatTap { id: number; x: number; y: number }
-const BATTLE_DURATION = 300; // 5:00 total
+const BATTLE_DURATION = 210; // 3:30 total (15s warmup + 180s battle + 15s end)
 
 // --- LiveKit Video Component ---
-function BattleVideo({ expectedUsername, isWarmup }: { expectedUsername?: string, isWarmup: boolean }) {
+import { useConnectionState, useRoomContext } from '@livekit/components-react';
+
+function RoomWatcher({ playerA, playerB, onBothConnected }: { playerA?: string, playerB?: string, onBothConnected: (ready: boolean) => void }) {
+  const participants = useParticipants();
+  const connectionState = useConnectionState();
+
+  useEffect(() => {
+    if (connectionState !== "connected") {
+      onBothConnected(false);
+      return;
+    }
+    const a = participants.find(p => p.identity === playerA);
+    const b = participants.find(p => p.identity === playerB);
+    onBothConnected(!!a && !!b);
+  }, [participants, connectionState, playerA, playerB, onBothConnected]);
+  return null;
+}
+
+function BattleVideo({ expectedUsername, phase }: { expectedUsername?: string, phase: string }) {
   const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: false }]);
   const trackRef = tracks.find(t => t.participant.identity === expectedUsername && t.publication !== undefined);
 
-  if (isWarmup) {
-    return (
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-[2]">
-        <span className="text-white/80 font-black tracking-widest text-[10px] mb-2 animate-pulse">CARGANDO LIVE...</span>
-        <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-      </div>
-    );
-  }
+  // Debug LiveKit connection state
+  const connectionState = useConnectionState();
+  useEffect(() => {
+    console.log(`LiveKit Connection State for ${expectedUsername || 'Unknown'}:`, connectionState);
+  }, [connectionState, expectedUsername]);
 
-  if (trackRef) {
-    return (
-      <div className="absolute inset-0 z-[0] overflow-hidden pointer-events-none">
+  return (
+    <div className="absolute inset-0 z-[0] overflow-hidden pointer-events-none">
+      {trackRef ? (
         <VideoTrack trackRef={trackRef as any} className="w-full h-full object-cover scale-[1.02]" />
-      </div>
-    );
-  }
-  
-  return null;
+      ) : (
+        <div className="w-full h-full bg-[#0d0008] flex items-center justify-center">
+          <span className="text-white/30 text-xs">Esperando cámara...</span>
+        </div>
+      )}
+      
+      {phase === "waiting" && (
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center z-[2]">
+          <span className="text-yellow-400 font-black tracking-widest text-[10px] mb-2 animate-pulse shadow-black drop-shadow-md text-center px-4">ESPERANDO CONEXIÓN...</span>
+        </div>
+      )}
+      
+      {phase === "warmup" && (
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex flex-col items-center justify-center z-[2]">
+          <span className="text-white/90 font-black tracking-widest text-[10px] mb-2 animate-pulse shadow-black drop-shadow-md">PREPARANDO...</span>
+          <div className="w-8 h-8 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+        </div>
+      )}
+    </div>
+  );
 }
 
 // --- LiveKit Local Controls (Mute & Flip Camera) ---
@@ -126,14 +156,16 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const [tapsB, setTapsB] = useState<FloatTap[]>([]);
 
   const [livekitToken, setLivekitToken] = useState("");
+  const [bothConnected, setBothConnected] = useState(false);
+  const [hasBroadcastedStart, setHasBroadcastedStart] = useState(false);
 
   // Batching logic for performance
   const pendingScoreA = useRef(0);
   const pendingScoreB = useRef(0);
   const lastTapSound = useRef(0);
 
-  const phase = timeLeft > 195 ? "warmup" : timeLeft > 15 ? "battle" : "finished";
-  const displayTime = phase === "warmup" ? timeLeft - 195 : phase === "battle" ? timeLeft - 15 : 0;
+  const phase = !bothConnected ? "waiting" : (timeLeft > 195 ? "warmup" : timeLeft > 15 ? "battle" : "finished");
+  const displayTime = phase === "waiting" ? 0 : (phase === "warmup" ? timeLeft - 195 : phase === "battle" ? timeLeft - 15 : 0);
   const isUrgent = phase === "battle" && displayTime <= 30;
 
   const calculateTimeLeft = (startIso: string) => {
@@ -193,6 +225,10 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
          setIsFinishedLocally(false);
          setTimeLeft(calculateTimeLeft(payload.started_at));
       })
+      .on("broadcast", { event: "battle_start" }, ({ payload }) => {
+         setBattleData((prev: any) => ({ ...prev, started_at: payload.started_at }));
+         setTimeLeft(calculateTimeLeft(payload.started_at));
+      })
       .subscribe();
       
     return () => { supabase.removeChannel(ch); };
@@ -226,12 +262,22 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
 
   // Master Timer
   useEffect(() => {
-    if (!battleData?.started_at) return;
+    if (!battleData?.started_at || !bothConnected) return;
     const t = setInterval(() => {
       setTimeLeft(calculateTimeLeft(battleData.started_at));
     }, 1000);
     return () => clearInterval(t);
-  }, [battleData?.started_at]);
+  }, [battleData?.started_at, bothConnected]);
+
+  // Sync True Start Time
+  useEffect(() => {
+    if (bothConnected && mySide === "A" && !hasBroadcastedStart) {
+       setHasBroadcastedStart(true);
+       const newStart = new Date().toISOString();
+       supabase.from('battles').update({ started_at: newStart }).eq('id', id).then();
+       supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "battle_start", payload: { started_at: newStart } });
+    }
+  }, [bothConnected, mySide, hasBroadcastedStart, id]);
 
   // Finished Logic
   useEffect(() => {
@@ -398,7 +444,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         <div className="absolute inset-0 flex items-center justify-center z-10">
           <div className="bg-black/60 backdrop-blur-md border border-white/10 px-4 py-1 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
             <span className={`font-[family-name:var(--font-orbitron)] font-black text-lg tracking-[0.15em] ${isUrgent ? "text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]" : "text-white"}`}>
-              {phase === "warmup" ? `PREPARANDO... ${fmtTime(displayTime)}` : fmtTime(displayTime)}
+              {phase === "waiting" ? "ESPERANDO..." : phase === "warmup" ? `PREPARANDO... ${fmtTime(displayTime)}` : fmtTime(displayTime)}
             </span>
           </div>
         </div>
@@ -419,14 +465,16 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         audio={mySide !== "Audience"}
         className="flex-1 flex flex-col min-h-[220px]"
       >
+        <RoomWatcher playerA={playerA?.username} playerB={playerB?.username} onBothConnected={setBothConnected} />
+        
         <div className="grid grid-cols-2 gap-2 flex-1 relative">
-          {mySide !== "Audience" && <LocalControls isWarmup={phase === "warmup"} />}
+          {mySide !== "Audience" && <LocalControls isWarmup={phase === "warmup" || phase === "waiting"} />}
 
           <div className={`relative rounded-3xl overflow-hidden border border-[#ff007a]/15 select-none ${phase === "battle" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("A", e)}>
             <div className="absolute inset-0 bg-[#0d0008]" />
-            <BattleVideo expectedUsername={playerA?.username} isWarmup={phase === "warmup"} />
+            <BattleVideo expectedUsername={playerA?.username} phase={phase} />
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[1]">
-              {(!playerA?.username || phase === "warmup") && (
+              {(!playerA?.username || phase === "warmup" || phase === "waiting") && (
                 <>
                   {playerA && <img src={playerA.avatar_url || "https://i.pravatar.cc/150"} className="w-12 h-12 rounded-full mb-2 opacity-50" />}
                   <span className="text-[#ff007a]/8 font-black text-7xl">A</span>
@@ -444,9 +492,9 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
 
           <div className={`relative rounded-3xl overflow-hidden border border-[#00d1ff]/15 select-none ${phase === "battle" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("B", e)}>
             <div className="absolute inset-0 bg-[#000810]" />
-            <BattleVideo expectedUsername={playerB?.username} isWarmup={phase === "warmup"} />
+            <BattleVideo expectedUsername={playerB?.username} phase={phase} />
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[1]">
-              {(!playerB?.username || phase === "warmup") && (
+              {(!playerB?.username || phase === "warmup" || phase === "waiting") && (
                 <>
                   {playerB && <img src={playerB.avatar_url || "https://i.pravatar.cc/150"} className="w-12 h-12 rounded-full mb-2 opacity-50" />}
                   <span className="text-[#00d1ff]/8 font-black text-7xl">B</span>

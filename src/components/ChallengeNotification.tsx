@@ -81,6 +81,17 @@ export function ChallengeNotification() {
           }
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "battles" },
+        (payload) => {
+          if (!userId) return;
+          if (payload.new.player_a_id === userId || payload.new.player_b_id === userId) {
+            setHidden(true);
+            router.push(`/battle/${payload.new.id}`);
+          }
+        }
+      )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -116,7 +127,13 @@ export function ChallengeNotification() {
 
     const { error: updateError } = await supabase
       .from("challenges")
-      .update({ status: "accepted", battle_id: battle.id, resolved_at: new Date().toISOString() })
+      .update({ 
+        status: "accepted", 
+        battle_id: battle.id, 
+        resolved_at: new Date().toISOString(),
+        challenger_id: challenge.challenger_id,
+        challenged_id: user.id
+      })
       .eq("id", challenge.id);
       
     if (updateError) {
