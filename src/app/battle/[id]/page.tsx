@@ -49,6 +49,13 @@ function LocalControls({ isWarmup }: { isWarmup: boolean }) {
   const [isMuted, setIsMuted] = useState(false);
   const [facingMode, setFacingMode] = useState<"user"|"environment">("user");
 
+  useEffect(() => {
+    if (localParticipant) {
+      localParticipant.setCameraEnabled(true, { facingMode: "user" }).catch(e => console.error("Auto camera error:", e));
+      localParticipant.setMicrophoneEnabled(true).catch(e => console.error("Auto mic error:", e));
+    }
+  }, [localParticipant]);
+
   if (isWarmup || !localParticipant) return null;
 
   const toggleMute = async () => {
@@ -406,7 +413,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       <LiveKitRoom
         serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
         token={livekitToken}
-        connect={phase === "battle" && !!livekitToken}
+        connect={!!livekitToken}
         connectOptions={{ autoSubscribe: true }}
         video={mySide !== "Audience"}
         audio={mySide !== "Audience"}
