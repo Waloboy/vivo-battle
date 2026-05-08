@@ -128,7 +128,7 @@ export default function MessagesPage() {
       .eq("is_read", false);
 
     // Update conversation unread count locally
-    setConversations(prev => prev.map(c =>
+    setConversations(prev => prev.map((c: any) =>
       c.user_id === partnerId ? { ...c, unread: 0 } : c
     ));
 
@@ -156,7 +156,7 @@ export default function MessagesPage() {
 
           if (isRelevantChat) {
             setMessages(prev => {
-              if (prev.some(m => m.id === msg.id)) return prev;
+              if (prev.some((m: any) => m.id === msg.id)) return prev;
               return [...prev, msg];
             });
 
@@ -208,7 +208,7 @@ export default function MessagesPage() {
 
     if (data) {
       // Replace temp message with real one
-      setMessages(prev => prev.map(m => m.id === tempMsg.id ? data : m));
+      setMessages(prev => prev.map((m: any) => m.id === tempMsg.id ? data : m));
     }
 
     // Refresh conversations list
@@ -294,7 +294,7 @@ export default function MessagesPage() {
               <p className="text-white/25 text-sm">Envía el primer mensaje</p>
             </div>
           )}
-          {messages.map((msg) => {
+          {messages.map((msg: any) => {
             const isMine = msg.sender_id === user.id;
             return (
               <motion.div

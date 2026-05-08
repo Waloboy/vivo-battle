@@ -179,7 +179,7 @@ export default function Dashboard() {
         <div className="cyber-glass rounded-2xl overflow-hidden border-white/10">
           {transactions.length === 0 ? (
             <div className="p-8 text-center text-white/30 text-sm">No hay movimientos aún.</div>
-          ) : transactions.map((txn) => (
+          ) : transactions.map((txn: any) => (
             <div key={txn.id} className="flex items-center justify-between px-4 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className={`p-2 rounded-lg flex-shrink-0 ${

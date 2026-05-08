@@ -24,7 +24,7 @@ export async function getUserBalance(userId: string): Promise<number> {
   const incomeTypes = ["deposit", "gift", "bonus", "manual_adjustment"];
   const expenseTypes = ["withdrawal"];
 
-  const balance = txns.reduce((acc, txn) => {
+  const balance = txns.reduce((acc: any, txn: any) => {
     const amount = txn.amount_credits || 0;
     if (incomeTypes.includes(txn.type)) {
       return acc + amount;

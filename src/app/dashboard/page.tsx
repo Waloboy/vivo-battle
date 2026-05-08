@@ -216,11 +216,11 @@ export default function ExploreDashboard() {
         { event: "UPDATE", schema: "public", table: "battles" },
         (payload: any) => {
           setBattles(prev =>
-            prev.map(b =>
+            prev.map((b: any) =>
               b.id === payload.new.id
                 ? { ...b, score_a: payload.new.score_a, score_b: payload.new.score_b, is_active: payload.new.is_active }
                 : b
-            ).filter(b => b.is_active)
+            ).filter((b: any) => b.is_active)
           );
         }
       )

@@ -148,8 +148,8 @@ export default function AdminDashboard() {
     </div>
   );
 
-  const pending = transactions.filter(t => t.status === "pending");
-  const totalGiftsCr = transactions.filter(t => t.type === "gift").reduce((s, t) => s + (t.amount_credits || 0), 0);
+  const pending = transactions.filter((t: any) => t.status === "pending");
+  const totalGiftsCr = transactions.filter((t: any) => t.type === "gift").reduce((s: any, t: any) => s + (t.amount_credits || 0), 0);
 
   return (
     <div className="flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto space-y-5">
@@ -203,7 +203,7 @@ export default function AdminDashboard() {
           {/* Mobile Cards */}
           <div className="flex flex-col gap-3 md:hidden">
             {transactions.length === 0 && <p className="text-center text-white/30 text-sm py-6">No hay transacciones.</p>}
-            {transactions.map(txn => {
+            {transactions.map((txn: any) => {
               const isProc = processingId === txn.id;
               const prof = txn.profiles;
               return (
@@ -267,7 +267,7 @@ export default function AdminDashboard() {
                 <tbody>
                   {transactions.length === 0 ? (
                     <tr><td colSpan={9} className="p-8 text-center text-white/30">No hay transacciones.</td></tr>
-                  ) : transactions.map(txn => {
+                  ) : transactions.map((txn: any) => {
                     const isProc = processingId === txn.id;
                     const prof = txn.profiles;
                     return (

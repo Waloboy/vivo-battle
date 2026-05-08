@@ -520,7 +520,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
 
       <div className="mt-3 h-32 bg-black/40 backdrop-blur-xl rounded-[28px] p-3 flex flex-col border border-white/5 relative flex-shrink-0">
         <div className="flex-1 overflow-y-auto space-y-1.5 mb-2 pr-1 flex flex-col">
-          {messages.map(msg => {
+          {messages.map((msg: any) => {
             const isElite = msg.text?.includes("Dominion") || msg.text?.includes("Satellite") || msg.text?.includes("Hypernova") || msg.text?.includes("VIVO Supreme");
             return (
               <div key={msg.id} className={`text-[11px] py-1.5 px-3 rounded-xl w-max max-w-[92%] flex gap-2 items-start border ${isElite ? 'animate-pulse' : ''}`} 
