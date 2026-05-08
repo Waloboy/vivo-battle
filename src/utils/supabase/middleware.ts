@@ -37,12 +37,7 @@ export async function updateSession(request: NextRequest) {
   const protectedRoutes = ['/dashboard', '/battle', '/admin', '/profile']
   const isProtectedRoute = protectedRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
 
-  if (isProtectedRoute && !user) {
-    // no user, potentially respond by redirecting the user to the login page
-    const url = request.nextUrl.clone()
-    url.pathname = '/'
-    return NextResponse.redirect(url)
-  }
+  // Allow component to handle no-user state (emergency fix)
 
   // If user is signed in and visits the root page, redirect to dashboard
   if (request.nextUrl.pathname === '/' && user) {

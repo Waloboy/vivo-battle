@@ -467,8 +467,8 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         token={livekitToken}
         connect={!!livekitToken}
         connectOptions={{ autoSubscribe: true }}
-        video={mySide !== "Audience"}
-        audio={mySide !== "Audience"}
+        video={true}
+        audio={true}
         className="flex-1 flex flex-col min-h-[220px]"
       >
         <RoomWatcher playerA={playerA?.username} playerB={playerB?.username} onBothConnected={setBothConnected} />
