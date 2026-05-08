@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Wallet, Gift, X, Heart, Mic, MicOff, RefreshCw } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { GIFT_CATALOG, type GiftKey } from "../gifts";
 import { useAnimatedCount } from "../useAnimatedCount";
 import { getUserBalance } from "@/utils/balance";
@@ -121,7 +121,6 @@ function LocalControls({ isWarmup }: { isWarmup: boolean }) {
 export default function BattleView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
   
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -207,6 +206,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     })();
 
     const ch = supabase.channel(`battle-${id}`)
+      .on("system", { event: "reconnect" }, () => console.log("Reconnected to battle channel"))
       .on("broadcast", { event: "chat" }, ({ payload }) => setMessages(p => [...p, payload]))
       .on("broadcast", { event: "score" }, ({ payload }) => {
         if (payload.side === "A") setRawA(p => p + payload.amount);

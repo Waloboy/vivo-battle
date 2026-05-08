@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Eye, Plus, UserPlus, Check, Loader2, Flame, Zap, Search, Swords, Shuffle, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
+import { supabase } from "@/lib/supabase";
 
 // ── Types ──
 interface BattleProfile {
@@ -64,7 +64,6 @@ function simulateViewers(battleId: string, scoreA: number, scoreB: number): numb
 }
 
 export default function ExploreDashboard() {
-  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("explore");
@@ -211,6 +210,7 @@ export default function ExploreDashboard() {
   useEffect(() => {
     const channel = supabase
       .channel("explore-battles-realtime")
+      .on("system", { event: "reconnect" }, () => console.log("Reconnected to explore battles"))
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "battles" },

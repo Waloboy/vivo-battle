@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Wallet, Plus, ArrowUpRight, History, Loader2, CheckCircle2, Sparkles, TrendingUp } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
-import { createClient } from "@/utils/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { fmtCR, fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
 import { getUserBalance } from "../../utils/balance";
 
@@ -21,7 +21,6 @@ export default function Dashboard() {
   const [balance, setBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [bcvRate, setBcvRate] = useState<number | null>(null);

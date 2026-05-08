@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { User, MapPin, Building2, Loader2, Save, CheckCircle2, Phone, FileText, Edit2, ArrowLeft, CreditCard, History, Sparkles, TrendingUp, Users, UserCheck, UserPlus, Camera, Trophy, X } from "lucide-react";
 import { motion } from "framer-motion";
-import { createClient } from "@/utils/supabase/client";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
 import { fmtCR, fmtUSD, fmtBs } from "@/utils/format";
 import { getUserBalance } from "../../utils/balance";
 import Link from "next/link";
@@ -29,7 +30,7 @@ export default function ProfilePage() {
   const [followingCount, setFollowingCount] = useState(0);
   const [battlesCount, setBattlesCount] = useState(0);
 
-  const supabase = createClient();
+  const router = useRouter();
 
   useEffect(() => {
     fetchProfile();

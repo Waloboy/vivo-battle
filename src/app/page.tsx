@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/utils/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { Swords, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Swords, User, Wallet, LogOut, ShieldAlert, Compass, MessageCircle } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
-import { createClient } from "@/utils/supabase/client";
+import { supabase } from "@/lib/supabase";
 
 export function Navbar() {
   const [user, setUser] = useState<any>(null);
@@ -12,7 +12,6 @@ export function Navbar() {
   const [unreadMessages, setUnreadMessages] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     const checkUnread = async (userId: string) => {
@@ -67,6 +66,7 @@ export function Navbar() {
       if (!user) return;
 
       channel = supabase.channel("navbar-messages")
+        .on("system", { event: "reconnect" }, () => console.log("Reconnected to navbar messages"))
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "messages" },
