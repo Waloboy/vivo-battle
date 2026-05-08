@@ -207,16 +207,16 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
 
     const ch = supabase.channel(`battle-${id}`)
       .on("system", { event: "reconnect" }, () => console.log("Reconnected to battle channel"))
-      .on("broadcast", { event: "chat" }, ({ payload }) => setMessages(p => [...p, payload]))
-      .on("broadcast", { event: "score" }, ({ payload }) => {
+      .on("broadcast", { event: "chat" }, ({ payload }: { payload: any }) => setMessages(p => [...p, payload]))
+      .on("broadcast", { event: "score" }, ({ payload }: { payload: any }) => {
         if (payload.side === "A") setRawA(p => p + payload.amount);
         else setRawB(p => p + payload.amount);
       })
-      .on("broadcast", { event: "rematch_request" }, ({ payload }) => {
+      .on("broadcast", { event: "rematch_request" }, ({ payload }: { payload: any }) => {
          if (payload.side === "A") setRematchA(true);
          if (payload.side === "B") setRematchB(true);
       })
-      .on("broadcast", { event: "rematch_accepted" }, ({ payload }) => {
+      .on("broadcast", { event: "rematch_accepted" }, ({ payload }: { payload: any }) => {
          setBattleData((prev: any) => ({ ...prev, started_at: payload.started_at }));
          setRawA(0);
          setRawB(0);
@@ -225,11 +225,11 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
          setIsFinishedLocally(false);
          setTimeLeft(calculateTimeLeft(payload.started_at));
       })
-      .on("broadcast", { event: "battle_start" }, ({ payload }) => {
+      .on("broadcast", { event: "battle_start" }, ({ payload }: { payload: any }) => {
          setBattleData((prev: any) => ({ ...prev, started_at: payload.started_at }));
          setTimeLeft(calculateTimeLeft(payload.started_at));
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "battles", filter: `id=eq.${id}` }, (payload) => {
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "battles", filter: `id=eq.${id}` }, (payload: any) => {
          if (payload.new.started_at) {
            setBattleData((prev: any) => ({ ...prev, started_at: payload.new.started_at }));
            setTimeLeft(calculateTimeLeft(payload.new.started_at));
