@@ -86,6 +86,28 @@ export default function ExploreDashboard() {
   const [challengeSent, setChallengeSent] = useState<Set<string>>(new Set());
   const [matchmaking, setMatchmaking] = useState(false);
 
+  // ── Realtime subscription for live score updates (PRIORITY) ──
+  useEffect(() => {
+    const channel = supabase
+      .channel("explore-battles-realtime")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "battles" },
+        (payload: any) => {
+          setBattles(prev =>
+            prev.map((b: any) =>
+              b.id === payload.new.id
+                ? { ...b, score_a: payload.new.score_a, score_b: payload.new.score_b, is_active: payload.new.is_active }
+                : b
+            ).filter((b: any) => b.is_active)
+          );
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [supabase]);
+
   // ── Initialize user & follows ──
   useEffect(() => {
     (async () => {
@@ -207,27 +229,6 @@ export default function ExploreDashboard() {
     return () => observerRef.current?.disconnect();
   }, [hasMore, loadingMore, loading, activeTab, fetchBattles]);
 
-  // ── Realtime subscription for live score updates ──
-  useEffect(() => {
-    const channel = supabase
-      .channel("explore-battles-realtime")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "battles" },
-        (payload: any) => {
-          setBattles(prev =>
-            prev.map((b: any) =>
-              b.id === payload.new.id
-                ? { ...b, score_a: payload.new.score_a, score_b: payload.new.score_b, is_active: payload.new.is_active }
-                : b
-            ).filter((b: any) => b.is_active)
-          );
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [supabase]);
 
   // ── Follow / Unfollow ──
   const toggleFollow = async (targetUserId: string) => {

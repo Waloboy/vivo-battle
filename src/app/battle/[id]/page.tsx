@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { setLogLevel } from "livekit-client";
+
+setLogLevel("debug");
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Wallet, Gift, X, Heart, Mic, MicOff, RefreshCw } from "lucide-react";
 import confetti from "canvas-confetti";
