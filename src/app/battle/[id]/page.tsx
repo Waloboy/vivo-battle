@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Wallet, Gift, X, Heart, Mic, MicOff, RefreshCw } from "lucide-react";
 import confetti from "canvas-confetti";
@@ -39,7 +39,7 @@ function RoomWatcher({ playerA, playerB, onBothConnected }: { playerA?: string, 
 
 function BattleVideo({ expectedUsername, phase }: { expectedUsername?: string, phase: string }) {
   const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: false }]);
-  const trackRef = tracks.find(t => t.participant.identity === expectedUsername && t.publication !== undefined);
+  const trackRef = tracks.find(t => t.participant.identity === expectedUsername);
 
   // Debug LiveKit connection state
   const connectionState = useConnectionState();
@@ -121,7 +121,7 @@ function LocalControls({ isWarmup }: { isWarmup: boolean }) {
 export default function BattleView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -228,6 +228,12 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       .on("broadcast", { event: "battle_start" }, ({ payload }) => {
          setBattleData((prev: any) => ({ ...prev, started_at: payload.started_at }));
          setTimeLeft(calculateTimeLeft(payload.started_at));
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "battles", filter: `id=eq.${id}` }, (payload) => {
+         if (payload.new.started_at) {
+           setBattleData((prev: any) => ({ ...prev, started_at: payload.new.started_at }));
+           setTimeLeft(calculateTimeLeft(payload.new.started_at));
+         }
       })
       .subscribe();
       

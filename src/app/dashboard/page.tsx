@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Eye, Plus, UserPlus, Check, Loader2, Flame, Zap, Search, Swords, Shuffle, X } from "lucide-react";
 import Link from "next/link";
@@ -64,7 +64,7 @@ function simulateViewers(battleId: string, scoreA: number, scoreB: number): numb
 }
 
 export default function ExploreDashboard() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("explore");

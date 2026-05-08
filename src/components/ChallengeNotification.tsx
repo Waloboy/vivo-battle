@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Swords, X } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -13,7 +13,7 @@ interface IncomingChallenge {
 }
 
 export function ChallengeNotification() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const [challenge, setChallenge] = useState<IncomingChallenge | null>(null);
   const [responding, setResponding] = useState(false);
