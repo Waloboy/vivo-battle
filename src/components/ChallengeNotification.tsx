@@ -52,7 +52,7 @@ export function ChallengeNotification() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "challenges" },
-        async (payload) => {
+        async (payload: any) => {
           if (!userId) return;
           if (payload.new.challenged_id === userId && payload.new.status === "pending") {
             const { data: prof } = await supabase
@@ -73,7 +73,7 @@ export function ChallengeNotification() {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "challenges" },
-        (payload) => {
+        (payload: any) => {
           if (!userId) return;
           if (payload.new.challenger_id === userId && payload.new.status === "accepted" && payload.new.battle_id) {
             setHidden(true);
@@ -84,7 +84,7 @@ export function ChallengeNotification() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "battles" },
-        (payload) => {
+        (payload: any) => {
           if (!userId) return;
           if (payload.new.player_a_id === userId || payload.new.player_b_id === userId) {
             setHidden(true);

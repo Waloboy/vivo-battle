@@ -145,7 +145,7 @@ export default function MessagesPage() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
-        (payload) => {
+        (payload: any) => {
           const msg = payload.new as Message;
           const isMine = msg.sender_id === user.id;
           const isForMe = msg.receiver_id === user.id;

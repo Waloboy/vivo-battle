@@ -214,7 +214,7 @@ export default function ExploreDashboard() {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "battles" },
-        (payload) => {
+        (payload: any) => {
           setBattles(prev =>
             prev.map(b =>
               b.id === payload.new.id

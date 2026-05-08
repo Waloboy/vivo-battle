@@ -41,7 +41,7 @@ export function Navbar() {
     checkUser();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (event: any, session: any) => {
         if (session?.user) {
           setUser(session.user);
           checkUnread(session.user.id);
@@ -70,7 +70,7 @@ export function Navbar() {
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "messages" },
-          (payload) => {
+          (payload: any) => {
             if (payload.new.receiver_id === user.id && !payload.new.is_read) {
               setUnreadMessages(true);
             }
@@ -79,7 +79,7 @@ export function Navbar() {
         .on(
           "postgres_changes",
           { event: "UPDATE", schema: "public", table: "messages" },
-          (payload) => {
+          (payload: any) => {
             if (payload.new.receiver_id === user.id && payload.new.is_read) {
               checkUnread(user.id);
             }
