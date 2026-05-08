@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Send, ArrowLeft, Loader2, MessageCircle, Circle } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
 
 interface Conversation {
   user_id: string;
@@ -24,6 +24,7 @@ interface Message {
 }
 
 export default function MessagesPage() {
+  const supabase = createClient();
   const [user, setUser] = useState<any>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeChat, setActiveChat] = useState<string | null>(null);
@@ -141,7 +142,6 @@ export default function MessagesPage() {
 
     const channel = supabase
       .channel(`messages-realtime-listener`)
-      .on("system", { event: "reconnect" }, () => console.log("Reconnected to messages"))
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },

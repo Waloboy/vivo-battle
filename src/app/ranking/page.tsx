@@ -4,9 +4,10 @@ import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Trophy, Medal, Star, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
 
 export default function RankingPage() {
+  const supabase = createClient();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

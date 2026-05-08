@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Swords, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
 
 interface IncomingChallenge {
   id: string;
@@ -13,6 +13,7 @@ interface IncomingChallenge {
 }
 
 export function ChallengeNotification() {
+  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const [challenge, setChallenge] = useState<IncomingChallenge | null>(null);
   const [responding, setResponding] = useState(false);
@@ -48,7 +49,6 @@ export function ChallengeNotification() {
 
     const channel = supabase
       .channel("challenge-notifications")
-      .on("system", { event: "reconnect" }, () => console.log("Reconnected to challenge notifications"))
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "challenges" },

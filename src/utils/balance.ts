@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { createClient } from "./supabase/client";
 
 /**
  * Calcula el balance consolidado del usuario basándose estrictamente
@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
  * Egresos: withdrawal
  */
 export async function getUserBalance(userId: string): Promise<number> {
+  const supabase = createClient();
   
   const { data: txns, error } = await supabase
     .from("transactions")

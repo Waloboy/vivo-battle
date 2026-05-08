@@ -5,8 +5,7 @@ import {
   CheckCircle2, XCircle, Clock, Loader2, RefreshCw,
   ShieldAlert, Sparkles, Scissors, Copy, CheckCheck, ChevronDown, ChevronUp
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
 import { fmtCR, fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
 
 type Tab = "transactions" | "settlement";
@@ -35,7 +34,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function AdminDashboard() {
-  const router = useRouter();
+  const supabase = createClient();
   const [tab, setTab] = useState<Tab>("transactions");
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
