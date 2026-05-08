@@ -1,18 +1,33 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { User, MapPin, Building2, Loader2, Save, CheckCircle2, Phone, FileText } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { User, MapPin, Building2, Loader2, Save, CheckCircle2, Phone, FileText, Edit2, ArrowLeft, CreditCard, History, Sparkles, TrendingUp, Users, UserCheck, UserPlus, Camera, Trophy, X } from "lucide-react";
+import { motion } from "framer-motion";
 import { createClient } from "@/utils/supabase/client";
+import { fmtCR, fmtUSD, fmtBs } from "@/utils/format";
+import { getUserBalance } from "../../utils/balance";
+import Link from "next/link";
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [view, setView] = useState<"office" | "edit">("office");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [originalUsername, setOriginalUsername] = useState("");
   const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
   const [daysUntilChange, setDaysUntilChange] = useState<number | null>(null);
+  const [bcvRate, setBcvRate] = useState<number>(0);
+  const [balance, setBalance] = useState<number>(0);
+  const [rankPosition, setRankPosition] = useState<number | string>("—");
+
+  // Social counters
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [battlesCount, setBattlesCount] = useState(0);
 
   const supabase = createClient();
 
@@ -23,10 +38,16 @@ export default function ProfilePage() {
   const fetchProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
+      // Fetch profile
       const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (data) {
         setProfile(data);
         setOriginalUsername(data.username);
+        
+        // Calculate rank
+        const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).gt('wins', data.wins || 0);
+        setRankPosition((count || 0) + 1);
+
         if (data.last_username_change) {
           const lastChange = new Date(data.last_username_change);
           const diffTime = Math.abs(new Date().getTime() - lastChange.getTime());
@@ -36,6 +57,25 @@ export default function ProfilePage() {
           }
         }
       }
+
+      // Fetch BCV rate
+      const { data: config } = await supabase.from("app_config").select("value").eq("key", "bcv_rate").single();
+      if (config) setBcvRate(parseFloat(config.value));
+
+      // Fetch dynamic balance using unified helper
+      const calculatedBalance = await getUserBalance(user.id);
+      setBalance(calculatedBalance);
+
+      // Fetch social counts
+      const [followersRes, followingRes, battlesRes] = await Promise.all([
+        supabase.from("follows").select("id", { count: "exact", head: true }).eq("followed_id", user.id),
+        supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id),
+        supabase.from("battles").select("id", { count: "exact", head: true }).or(`player_a_id.eq.${user.id},player_b_id.eq.${user.id}`),
+      ]);
+
+      setFollowersCount(followersRes.count || 0);
+      setFollowingCount(followingRes.count || 0);
+      setBattlesCount(battlesRes.count || 0);
     }
     setLoading(false);
   };
@@ -104,152 +144,362 @@ export default function ProfilePage() {
     setIsSaving(false);
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    
+    setIsUploadingAvatar(true);
+    const fileExt = file.name.split('.').pop();
+    const filePath = `${user.id}-${Math.random()}.${fileExt}`;
+    
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file);
+    if (!uploadError) {
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id);
+      setProfile((prev: any) => ({...prev, avatar_url: publicUrl}));
+    } else {
+      alert("Error subiendo foto: " + uploadError.message);
+    }
+    setIsUploadingAvatar(false);
+  };
+
   if (loading) {
     return <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#ff007a]" size={40} /></div>;
   }
 
-  return (
-    <div className="flex-1 max-w-3xl w-full mx-auto p-4 md:p-8 space-y-8">
-      <div>
-        <h1 className="text-3xl font-black mb-2 text-[#ff007a]">Tu Perfil</h1>
-        <p className="text-white/50">Configura tus datos personales y cuenta bancaria para recibir retiros.</p>
-      </div>
+  const balanceUsd = balance / 100;
+  const balanceBs = bcvRate ? (balance / 100) * bcvRate : null;
 
-      <div className="space-y-6">
-        {/* Información Personal */}
-        <div className="cyber-glass p-6 rounded-3xl border-white/10 space-y-4">
-          <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
-            <User className="text-[#ff007a]" />
-            Información Personal
-          </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">Username</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 font-bold">@</span>
-                <input
-                  type="text"
-                  value={profile?.username || ""}
-                  onChange={(e) => setProfile({...profile, username: e.target.value.replace(/\s/g, '').toLowerCase()})}
-                  disabled={daysUntilChange !== null}
-                  placeholder="tu_usuario"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-9 pr-12 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#ff007a] transition-colors disabled:opacity-50"
-                />
-                <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                  {usernameStatus === "checking" && <Loader2 className="animate-spin text-white/50" size={16} />}
-                  {usernameStatus === "available" && <CheckCircle2 className="text-emerald-500" size={16} />}
-                  {usernameStatus === "taken" && <span className="text-red-500 text-xs font-bold">En uso</span>}
+  return (
+    <div className="flex-1 max-w-2xl w-full mx-auto p-4 md:p-8 pb-24">
+      <input 
+        type="file" 
+        accept="image/*" 
+        className="hidden" 
+        ref={fileInputRef} 
+        onChange={handleAvatarUpload} 
+      />
+
+      {view === "office" ? (
+        /* ══════════════════════════════════════
+            VIEW: USER OFFICE
+           ══════════════════════════════════════ */
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {/* Hero Section */}
+          <div className="relative overflow-hidden cyber-glass rounded-[2.5rem] p-8 border-white/10 text-center">
+            {/* Background effect */}
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-[#ff007a]/10 rounded-full blur-[80px]" />
+            <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-[#00d1ff]/10 rounded-full blur-[80px]" />
+
+            <div className="relative space-y-4">
+              <div className="inline-block relative">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-[#ff007a] to-[#00d1ff] p-1 shadow-[0_0_30px_rgba(255,0,122,0.3)]">
+                  <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden relative">
+                    {profile?.avatar_url ? (
+                      <img src={profile.avatar_url} className={`w-full h-full object-cover ${isUploadingAvatar ? 'opacity-50' : ''}`} />
+                    ) : (
+                      <User size={48} className="text-white/20" />
+                    )}
+                    {isUploadingAvatar && <Loader2 className="absolute inset-0 m-auto animate-spin text-white" size={24} />}
+                  </div>
                 </div>
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute bottom-0 right-0 p-2 bg-white text-black rounded-full shadow-lg hover:scale-110 transition-transform"
+                >
+                  <Camera size={14} />
+                </button>
               </div>
-              {daysUntilChange !== null && (
-                <p className="text-xs text-red-400 mt-1">Podrás cambiar tu nombre de usuario nuevamente en {daysUntilChange} días.</p>
-              )}
+
+              <div>
+                <h1 className="text-2xl font-black text-white">@{profile?.username || "usuario"}</h1>
+                <p className="text-white/40 text-sm font-medium">{profile?.full_name || "VIVO User"}</p>
+              </div>
+
+              {/* ── Social Stats ── */}
+              <div className="flex items-center justify-center gap-6 pt-3">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="text-center"
+                >
+                  <p className="text-xl font-black text-white">{followersCount}</p>
+                  <p className="text-[10px] text-white/30 uppercase tracking-widest font-medium">Seguidores</p>
+                </motion.div>
+                <div className="w-px h-10 bg-white/10" />
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="text-center"
+                >
+                  <p className="text-xl font-black text-white">{followingCount}</p>
+                  <p className="text-[10px] text-white/30 uppercase tracking-widest font-medium">Siguiendo</p>
+                </motion.div>
+                <div className="w-px h-10 bg-white/10" />
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-center"
+                >
+                  <p className="text-xl font-black text-white">{battlesCount}</p>
+                  <p className="text-[10px] text-white/30 uppercase tracking-widest font-medium">Batallas</p>
+                </motion.div>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">Nombre Completo</label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
-                <input
-                  type="text"
-                  value={profile?.full_name || ""}
-                  onChange={(e) => setProfile({...profile, full_name: e.target.value})}
-                  placeholder="Ej. Juan Pérez"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#ff007a] transition-colors"
-                />
+          </div>
+
+          {/* ── Estadísticas Elite ── */}
+          <div className="grid grid-cols-2 gap-4">
+            <Link href="/ranking" className="cyber-glass rounded-[2rem] p-5 flex flex-col items-center justify-center border-white/5 relative overflow-hidden group hover:border-[#ffd700]/30 transition-colors">
+              <div className="absolute inset-0 bg-gradient-to-tr from-[#ffd700]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Trophy size={28} className="text-[#ffd700] mb-2" />
+              <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Ranking Mundial</p>
+              <p className="text-2xl font-black text-white">#{rankPosition}</p>
+            </Link>
+            
+            <div className="cyber-glass rounded-[2rem] p-5 flex flex-col items-center justify-center border-white/5 relative">
+              <Sparkles size={28} className="text-[#00d1ff] mb-2" />
+              <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">G / P / E</p>
+              <div className="flex gap-2 text-lg font-black">
+                <span className="text-[#00d1ff]">{profile?.wins || 0}</span>
+                <span className="text-white/30">/</span>
+                <span className="text-[#ff007a]">{profile?.losses || 0}</span>
+                <span className="text-white/30">/</span>
+                <span className="text-white/60">{profile?.draws || 0}</span>
               </div>
+            </div>
+
+            <div className="col-span-2 cyber-glass rounded-[2rem] p-5 flex items-center justify-between border-white/5">
+              <div>
+                <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Total Ganado Histórico</p>
+                <p className="text-2xl font-black text-[#ffd700]">{fmtCR(profile?.total_earned || 0)}</p>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-[#ffd700]/10 flex items-center justify-center border border-[#ffd700]/20">
+                <Trophy size={20} className="text-[#ffd700]" />
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Balance Card */}
+          <div className="cyber-glass rounded-3xl p-6 border-white/5 space-y-4 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+              <CreditCard size={80} />
             </div>
             
             <div>
-              <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">Ciudad</label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
-                <input
-                  type="text"
-                  value={profile?.city || ""}
-                  onChange={(e) => setProfile({...profile, city: e.target.value})}
-                  placeholder="Ej. Caracas"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#ff007a] transition-colors"
-                />
+              <p className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Balance Disponible</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-black text-white">{fmtCR(balance)}</span>
               </div>
+            </div>
+
+            <div className="flex gap-4 pt-2">
+              <div className="flex items-center gap-1.5 bg-white/5 rounded-xl px-3 py-1.5 border border-white/5">
+                <TrendingUp size={12} className="text-emerald-400" />
+                <span className="text-sm font-bold text-emerald-400">{fmtUSD(balanceUsd)}</span>
+              </div>
+              {balanceBs !== null && (
+                <div className="flex items-center gap-1.5 bg-white/5 rounded-xl px-3 py-1.5 border border-white/5">
+                  <span className="text-sm font-bold text-[#ffd700]">{fmtBs(balanceBs)}</span>
+                </div>
+              )}
             </div>
           </div>
-        </div>
 
-        {/* Datos Bancarios */}
-        <div className="cyber-glass p-6 rounded-3xl border-white/10 space-y-4">
-          <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
-            <Building2 className="text-[#00d1ff]" />
-            Datos Bancarios
-          </h2>
-          <p className="text-sm text-white/50 mb-4">Aquí es donde enviaremos el dinero de tus retiros.</p>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">Banco</label>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
-                <input
-                  type="text"
-                  value={profile?.bank_name || ""}
-                  onChange={(e) => setProfile({...profile, bank_name: e.target.value})}
-                  placeholder="Ej. Mercantil"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
-                />
+          {/* Main Actions */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <a 
+              href="/wallet"
+              className="flex items-center justify-between p-5 cyber-glass rounded-2xl border-white/5 hover:bg-white/5 transition-all group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-xl bg-[#ff007a]/10 text-[#ff007a]">
+                  <Sparkles size={20} />
+                </div>
+                <div>
+                  <p className="font-bold text-white text-sm">Mis Ganancias</p>
+                  <p className="text-[10px] text-white/30 uppercase tracking-tighter">Historial de Gifts</p>
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">Cédula de Identidad</label>
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
+                <ArrowLeft size={16} className="rotate-180" />
+              </div>
+            </a>
+
+            <a 
+              href="/wallet"
+              className="flex items-center justify-between p-5 cyber-glass rounded-2xl border-white/5 hover:bg-white/5 transition-all group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-xl bg-[#00d1ff]/10 text-[#00d1ff]">
+                  <History size={20} />
+                </div>
+                <div>
+                  <p className="font-bold text-white text-sm">Transacciones</p>
+                  <p className="text-[10px] text-white/30 uppercase tracking-tighter">Recargas y Retiros</p>
+                </div>
+              </div>
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
+                <ArrowLeft size={16} className="rotate-180" />
+              </div>
+            </a>
+          </div>
+
+          <button 
+            onClick={() => setView("edit")}
+            className="w-full py-4 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-2xl text-sm font-bold border border-white/5 transition-all flex items-center justify-center gap-2"
+          >
+            <Edit2 size={16} /> Configuración de Perfil
+          </button>
+        </div>
+      ) : (
+        /* ══════════════════════════════════════
+            VIEW: EDIT PROFILE
+           ══════════════════════════════════════ */
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+          <button 
+            onClick={() => setView("office")}
+            className="flex items-center gap-2 text-white/40 hover:text-white transition-colors text-sm font-bold uppercase tracking-widest mb-4"
+          >
+            <ArrowLeft size={16} /> Volver a Mi Oficina
+          </button>
+
+          <div className="cyber-glass rounded-3xl p-6 border-white/5">
+            <h2 className="text-xl font-black text-white mb-6">Información Personal</h2>
+            
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Username</label>
                 <div className="relative">
-                  <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <span className="text-white/40 font-bold">@</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={profile?.username || ""}
+                    onChange={(e) => setProfile({ ...profile, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-8 pr-12 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
+                  />
+                  <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                    {usernameStatus === "checking" && <Loader2 size={16} className="animate-spin text-white/40" />}
+                    {usernameStatus === "available" && <CheckCircle2 size={16} className="text-emerald-400" />}
+                    {usernameStatus === "taken" && <X size={16} className="text-red-400" />}
+                  </div>
+                </div>
+                {daysUntilChange !== null && profile?.username !== originalUsername && (
+                  <p className="text-[10px] text-red-400 font-bold mt-1">
+                    Debes esperar {daysUntilChange} días para cambiar tu username.
+                  </p>
+                )}
+                {usernameStatus === "taken" && (
+                  <p className="text-[10px] text-red-400 font-bold mt-1">
+                    Este username no está disponible.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Nombre Completo</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <User size={16} className="text-white/40" />
+                  </div>
+                  <input
+                    type="text"
+                    value={profile?.full_name || ""}
+                    onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
+                    placeholder="Tu nombre real"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Ciudad</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <MapPin size={16} className="text-white/40" />
+                  </div>
+                  <input
+                    type="text"
+                    value={profile?.city || ""}
+                    onChange={(e) => setProfile({ ...profile, city: e.target.value })}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
+                    placeholder="Caracas, Valencia, etc."
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Cédula</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <FileText size={16} className="text-white/40" />
+                  </div>
                   <input
                     type="text"
                     value={profile?.id_card || ""}
-                    onChange={(e) => setProfile({...profile, id_card: e.target.value})}
+                    onChange={(e) => setProfile({ ...profile, id_card: e.target.value })}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
                     placeholder="V-12345678"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
                   />
                 </div>
               </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-white/50 mb-1 uppercase tracking-wider">Número de Teléfono (Pago Móvil)</label>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Teléfono</label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={18} />
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Phone size={16} className="text-white/40" />
+                  </div>
                   <input
                     type="text"
                     value={profile?.phone_number || ""}
-                    onChange={(e) => setProfile({...profile, phone_number: e.target.value})}
+                    onChange={(e) => setProfile({ ...profile, phone_number: e.target.value })}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
                     placeholder="0414-1234567"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Banco Destino</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Building2 size={16} className="text-white/40" />
+                  </div>
+                  <input
+                    type="text"
+                    value={profile?.bank_name || ""}
+                    onChange={(e) => setProfile({ ...profile, bank_name: e.target.value })}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
+                    placeholder="Banesco, Mercantil, etc."
                   />
                 </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Guardar */}
-        <div className="flex items-center justify-between pt-4">
-          <div className="text-emerald-400 text-sm font-medium flex items-center gap-2 h-6">
             {saveMessage && (
-              <>
-                {saveMessage.includes("éxito") ? <CheckCircle2 size={16} /> : null}
+              <p className={`mt-4 text-xs font-bold text-center ${saveMessage.includes("Error") || saveMessage.includes("uso") ? "text-red-400" : "text-emerald-400"}`}>
                 {saveMessage}
-              </>
+              </p>
             )}
+
+            <button
+              onClick={handleSave}
+              disabled={isSaving || usernameStatus === "taken" || usernameStatus === "checking"}
+              className="mt-8 w-full py-4 bg-gradient-to-r from-[#00d1ff] to-[#ff007a] text-white rounded-xl font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(0,209,255,0.3)] hover:shadow-[0_0_30px_rgba(255,0,122,0.5)] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isSaving ? <Loader2 className="animate-spin" size={20} /> : <><Save size={20} /> Guardar Cambios</>}
+            </button>
           </div>
-          <button 
-            onClick={handleSave}
-            disabled={isSaving}
-            className="px-8 py-3 bg-white text-black hover:bg-white/80 disabled:opacity-50 rounded-xl font-bold transition-colors flex items-center gap-2"
-          >
-            {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-            Guardar Cambios
-          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }

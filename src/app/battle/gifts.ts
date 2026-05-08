@@ -15,8 +15,3 @@ export const GIFT_CATALOG = [
 ] as const;
 
 export type GiftKey = typeof GIFT_CATALOG[number]["key"];
-
-export const formatCR = (n: number) => {
-  if (n >= 1000) return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`;
-  return n.toString();
-};

@@ -6,6 +6,7 @@ import {
   ShieldAlert, Sparkles, Scissors, Copy, CheckCheck, ChevronDown, ChevronUp
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import { fmtCR, fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
 
 type Tab = "transactions" | "settlement";
 
@@ -165,12 +166,12 @@ export default function AdminDashboard() {
           </div>
           <div className="cyber-glass px-3 py-2 rounded-xl border-white/5 text-center min-w-[70px]">
             <span className="block text-white/30 text-[10px] uppercase">Gifts (CR)</span>
-            <span className="text-base font-bold text-[#e056fd]">{totalGiftsCr.toLocaleString()}</span>
+            <span className="text-base font-bold text-[#e056fd]">{totalGiftsCr.toLocaleString("es-VE")}</span>
           </div>
           {bcvRate && (
             <div className="cyber-glass px-3 py-2 rounded-xl border-white/5 text-center min-w-[90px]">
               <span className="block text-white/30 text-[10px] uppercase">BCV</span>
-              <span className="text-base font-bold text-[#ffd700]">{bcvRate.toFixed(2)}</span>
+              <span className="text-base font-bold text-[#ffd700]">{fmtBs(bcvRate)}</span>
             </div>
           )}
           <button onClick={() => { fetchTransactions(); if (tab === "settlement") fetchSettlement(); }}
@@ -218,11 +219,11 @@ export default function AdminDashboard() {
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <p className="text-white/30 font-light">Créditos</p>
-                      <p className="font-bold text-[#ff007a]">{txn.amount_credits?.toLocaleString()} CR</p>
+                      <p className="font-bold text-[#ff007a]">{fmtCR(txn.amount_credits ?? 0)}</p>
                     </div>
                     <div>
                       <p className="text-white/30 font-light">Monto BS</p>
-                      <p className="font-bold">{parseFloat(txn.amount_bs || 0).toFixed(2)} Bs</p>
+                      <p className="font-bold">{fmtBs(parseFloat(txn.amount_bs || 0))}</p>
                     </div>
                     <div>
                       <p className="text-white/30 font-light">Banco</p>
@@ -281,8 +282,8 @@ export default function AdminDashboard() {
                           <p>{prof?.id_card}</p><p>{prof?.phone_number}</p>
                         </td>
                         <td className="px-4 py-3 font-mono text-xs">{txn.reference_number || "—"}</td>
-                        <td className="px-4 py-3 font-semibold">{parseFloat(txn.amount_bs || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3 font-bold text-[#ff007a]">{txn.amount_credits?.toLocaleString()}</td>
+                        <td className="px-4 py-3 font-semibold">{fmtBs(parseFloat(txn.amount_bs || 0))}</td>
+                        <td className="px-4 py-3 font-bold text-[#ff007a]">{fmtCR(txn.amount_credits ?? 0)}</td>
                         <td className="px-4 py-3"><StatusBadge status={txn.status}/></td>
                         <td className="px-4 py-3 text-xs text-white/30">{new Date(txn.created_at).toLocaleDateString("es-VE", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}</td>
                         <td className="px-4 py-3 text-right">
@@ -328,19 +329,50 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Summary */}
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "Total Gifts (7d)", value: `${settlement.reduce((s,r)=>s+r.total_cr,0).toLocaleString()} CR`, color: "text-[#e056fd]" },
-              { label: "Payout 60%", value: `${settlement.reduce((s,r)=>s+r.user_payout_bs,0).toFixed(2)} Bs`, color: "text-emerald-400" },
-              { label: "Ganancia App 40%", value: `${settlement.reduce((s,r)=>s+r.app_share_cr,0).toLocaleString()} CR`, color: "text-[#ffd700]" },
-            ].map(c => (
-              <div key={c.label} className="cyber-glass rounded-xl p-3 border-white/5 text-center">
-                <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">{c.label}</p>
-                <p className={`text-base font-bold ${c.color}`}>{c.value}</p>
+          {/* Summary — triple currency */}
+          {(() => {
+            const totalCr    = settlement.reduce((s, r) => s + r.total_cr,       0);
+            const payoutCr   = settlement.reduce((s, r) => s + r.user_share_cr,  0);
+            const payoutBs   = settlement.reduce((s, r) => s + r.user_payout_bs, 0);
+            const appCr      = settlement.reduce((s, r) => s + r.app_share_cr,   0);
+            const cards = [
+              {
+                label: "Total Gifts (7d)",
+                main: fmtCR(totalCr),
+                sub1: fmtUSD(crToUsd(totalCr)),
+                sub2: bcvRate ? fmtBs(crToBs(totalCr, bcvRate)) : null,
+                color: "text-[#e056fd]",
+              },
+              {
+                label: "Payout Usuarios 60%",
+                main: fmtBs(payoutBs),
+                sub1: fmtCR(payoutCr),
+                sub2: fmtUSD(crToUsd(payoutCr)),
+                color: "text-emerald-400",
+              },
+              {
+                label: "Ganancia App 40%",
+                main: fmtCR(appCr),
+                sub1: fmtUSD(crToUsd(appCr)),
+                sub2: bcvRate ? fmtBs(crToBs(appCr, bcvRate)) : null,
+                color: "text-[#ffd700]",
+              },
+            ];
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {cards.map(c => (
+                  <div key={c.label} className="cyber-glass rounded-xl p-4 border-white/5">
+                    <p className="text-[10px] text-white/30 uppercase tracking-wider mb-2">{c.label}</p>
+                    <p className={`text-lg font-black ${c.color}`}>{c.main}</p>
+                    <div className="mt-1.5 space-y-0.5">
+                      <p className="text-[11px] text-white/35 font-medium">{c.sub1}</p>
+                      {c.sub2 && <p className="text-[11px] text-white/35 font-medium">{c.sub2}</p>}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            );
+          })()}
 
           {/* Collapsible user list */}
           {settLoading ? (
@@ -359,11 +391,14 @@ export default function AdminDashboard() {
                     <div className="flex items-center gap-3">
                       <div className="text-left">
                         <p className="font-semibold text-[#00d1ff] text-sm">@{row.username}</p>
-                        <p className="text-[10px] text-white/30 mt-0.5">{row.total_cr.toLocaleString()} CR total · 60% → {row.user_share_cr.toLocaleString()} CR</p>
+                        <p className="text-[10px] text-white/30 mt-0.5">{fmtCR(row.total_cr)} total · 60% → {fmtCR(row.user_share_cr)}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-lg font-black text-[#ffd700]">{row.user_payout_bs.toFixed(2)} <span className="text-xs text-white/30 font-normal">Bs</span></span>
+                      <div className="text-right">
+                        <p className="text-base font-black text-[#ffd700]">{fmtBs(row.user_payout_bs)}</p>
+                        <p className="text-[10px] text-white/30">{fmtUSD(crToUsd(row.user_share_cr))}</p>
+                      </div>
                       {row.paid
                         ? <span className="text-[10px] text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">✓ Pagado</span>
                         : row.expanded ? <ChevronUp size={16} className="text-white/40"/> : <ChevronDown size={16} className="text-white/40"/>
@@ -402,16 +437,19 @@ export default function AdminDashboard() {
                       {/* Split breakdown */}
                       <div className="flex flex-wrap gap-2 text-xs">
                         <div className="bg-[#e056fd]/5 border border-[#e056fd]/15 rounded-lg px-3 py-2">
-                          <span className="text-white/30">Total gifts: </span>
-                          <span className="font-bold text-[#e056fd]">{row.total_cr.toLocaleString()} CR</span>
+                          <p className="text-white/30 text-[10px] mb-0.5">Total gifts</p>
+                          <p className="font-bold text-[#e056fd]">{fmtCR(row.total_cr)}</p>
+                          <p className="text-[10px] text-white/30 mt-0.5">{fmtUSD(crToUsd(row.total_cr))}{bcvRate ? ` · ${fmtBs(crToBs(row.total_cr, bcvRate))}` : ""}</p>
                         </div>
                         <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-3 py-2">
-                          <span className="text-white/30">60% usuario: </span>
-                          <span className="font-bold text-emerald-400">{row.user_share_cr.toLocaleString()} CR</span>
+                          <p className="text-white/30 text-[10px] mb-0.5">60% usuario</p>
+                          <p className="font-bold text-emerald-400">{fmtCR(row.user_share_cr)}</p>
+                          <p className="text-[10px] text-white/30 mt-0.5">{fmtBs(row.user_payout_bs)} · {fmtUSD(crToUsd(row.user_share_cr))}</p>
                         </div>
                         <div className="bg-[#ffd700]/5 border border-[#ffd700]/15 rounded-lg px-3 py-2">
-                          <span className="text-white/30">40% app: </span>
-                          <span className="font-bold text-[#ffd700]">{row.app_share_cr.toLocaleString()} CR</span>
+                          <p className="text-white/30 text-[10px] mb-0.5">40% app</p>
+                          <p className="font-bold text-[#ffd700]">{fmtCR(row.app_share_cr)}</p>
+                          <p className="text-[10px] text-white/30 mt-0.5">{fmtUSD(crToUsd(row.app_share_cr))}{bcvRate ? ` · ${fmtBs(crToBs(row.app_share_cr, bcvRate))}` : ""}</p>
                         </div>
                       </div>
 
