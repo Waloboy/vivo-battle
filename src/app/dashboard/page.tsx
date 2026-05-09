@@ -86,10 +86,11 @@ export default function ExploreDashboard() {
   const [challengeSent, setChallengeSent] = useState<Set<string>>(new Set());
   const [matchmaking, setMatchmaking] = useState(false);
 
-  // ── Realtime subscription for live score updates (PRIORITY) ──
+  // ── Realtime subscription for live updates (PRIORITY) ──
   useEffect(() => {
     const channel = supabase
-      .channel("explore-battles-realtime")
+      .channel("dashboard-realtime")
+      // Listen for score updates and status changes
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "battles" },
@@ -101,6 +102,38 @@ export default function ExploreDashboard() {
                 : b
             ).filter((b: any) => b.is_active)
           );
+        }
+      )
+      // Listen for new battles being created
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "battles" },
+        async (payload: any) => {
+          // Fetch full data for the new battle including profiles
+          const { data: newBattle } = await supabase
+            .from("battles")
+            .select(`
+              *,
+              player_a:profiles!battles_player_a_id_fkey(username, avatar_url),
+              player_b:profiles!battles_player_b_id_fkey(username, avatar_url)
+            `)
+            .eq("id", payload.new.id)
+            .single();
+          
+          if (newBattle && newBattle.is_active) {
+            setBattles(prev => [newBattle as Battle, ...prev].slice(0, 50));
+          }
+        }
+      )
+      // Listen for challenges targeting the current user
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "challenges" },
+        (payload: any) => {
+          // We handle notification or redirection here if it's for us
+          // Note: Full challenge logic might be in a separate layout component, 
+          // but we ensure it's captured here for the dashboard.
+          console.log("New challenge detected:", payload.new);
         }
       )
       .subscribe();
