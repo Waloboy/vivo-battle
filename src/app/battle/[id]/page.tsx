@@ -19,7 +19,7 @@ import { Track } from 'livekit-client';
 import '@livekit/components-styles';
 
 interface FloatTap { id: number; x: number; y: number }
-const BATTLE_DURATION = 320; // 2:00 prep + 3:00 battle + 20s farewell
+const BATTLE_DURATION = 315; // 2:00 prep + 3:00 battle + 15s farewell
 type BattlePhase = "PREPARING" | "BATTLE" | "ENDING" | "FINISHED";
 
 interface Profile {
@@ -149,7 +149,7 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
             exit={{ scale: 0.5, opacity: 0 }}
             className="absolute inset-0 flex items-center justify-center z-[50] pointer-events-none"
           >
-            <span className="text-[15rem] md:text-[25rem] font-black text-white italic drop-shadow-[0_0_30px_rgba(255,0,122,0.8)]">
+            <span className="text-[6rem] md:text-[10rem] font-black text-white italic drop-shadow-[0_0_20px_rgba(255,0,122,0.8)]">
               {displayTime}
             </span>
           </motion.div>
@@ -160,12 +160,13 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
       <AnimatePresence>
         {phase === "BATTLE" && displayTime >= 178 && (
           <motion.div 
-            initial={{ scale: 0, rotate: -20, opacity: 0 }}
-            animate={{ scale: [0, 1.5, 1], rotate: 0, opacity: 1 }}
+            initial={{ scale: 0, rotate: -10, opacity: 0 }}
+            animate={{ scale: [0, 1.3, 1], rotate: 0, opacity: [0, 1, 1, 0] }}
+            transition={{ duration: 2 }}
             className="absolute inset-0 flex items-center justify-center z-[60] pointer-events-none"
           >
-            <div className="bg-[#ff007a] px-12 py-4 skew-x-[-12deg] border-4 border-white shadow-[0_0_50px_#ff007a]">
-              <span className="text-7xl md:text-9xl font-black text-white italic tracking-tighter">¡BATALLA!</span>
+            <div className="bg-[#ff007a] px-8 py-3 skew-x-[-12deg] border-2 border-white shadow-[0_0_30px_#ff007a]">
+              <span className="text-4xl md:text-6xl font-black text-white italic tracking-tighter">¡BATALLA!</span>
             </div>
           </motion.div>
         )}
@@ -268,12 +269,12 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const pendingScoreB = useRef(0);
   const lastTapSound = useRef(0);
 
-  const phase: BattlePhase = !bothConnected || timeLeft > 200 ? "PREPARING" : 
-                (timeLeft > 20 ? "BATTLE" : 
+  const phase: BattlePhase = !bothConnected || timeLeft > 195 ? "PREPARING" : 
+                (timeLeft > 15 ? "BATTLE" : 
                  timeLeft > 0 ? "ENDING" : "FINISHED");
 
-  const displayTime = phase === "PREPARING" ? Math.max(0, timeLeft - 200) : 
-                      (phase === "BATTLE" ? timeLeft - 20 : 
+  const displayTime = phase === "PREPARING" ? Math.max(0, timeLeft - 195) : 
+                      (phase === "BATTLE" ? timeLeft - 15 : 
                        phase === "ENDING" ? timeLeft : 0);
 
   const isUrgent = phase === "BATTLE" && displayTime <= 30;
@@ -473,15 +474,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       }
     }
 
-    if (timeLeft <= 0) {
-      if (mySide === "A") {
-        supabase.from("battles").update({ is_active: false }).eq("id", id).then(() => {
-           router.push("/dashboard");
-        });
-      } else {
-        router.push("/dashboard");
-      }
-    }
+    // FINISHED phase: no auto-redirect, static modal handles navigation
   }, [phase, timeLeft, isFinishedLocally, hasSettledPoints, mySide, id, router, supabase, rawA, rawB, battleData]);
 
   // Rematch Acceptance Logic
@@ -625,9 +618,9 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         {takeover && (
           <motion.div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-            <motion.div className="relative z-10 text-center" initial={{ scale: 0.3, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }}>
-              <motion.p className="text-5xl md:text-7xl font-black mb-4" style={{ color: takeover.color, textShadow: `0 0 40px ${takeover.color}` }} animate={{ scale: [1, 1.05, 1] }} transition={{ repeat: Infinity, duration: 0.8 }}>{takeover.label}</motion.p>
-              <p className="text-xl md:text-3xl font-bold text-white/90"><span className="text-[#00d1ff]">@{takeover.username}</span> sent</p>
+          <motion.div className="relative z-10 text-center" initial={{ scale: 0.3, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }}>
+              <motion.p className="text-2xl md:text-3xl font-black mb-2" style={{ color: takeover.color, textShadow: `0 0 20px ${takeover.color}` }} animate={{ scale: [1, 1.05, 1] }} transition={{ repeat: Infinity, duration: 0.8 }}>{takeover.label}</motion.p>
+              <p className="text-sm md:text-base font-bold text-white/90"><span className="text-[#00d1ff]">@{takeover.username}</span> envió</p>
             </motion.div>
           </motion.div>
         )}
@@ -637,35 +630,35 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         <span className="text-xs font-bold text-[#00d1ff]">{fmtWCR(balance)}</span>
       </div>
       {/* ── Progress Bar (Barra de Pelea) ── */}
-      <div className="relative w-full h-3 overflow-hidden border-b border-white/10 z-20 bg-[#0d0008]">
+      <div className="relative w-full h-2.5 overflow-hidden border-b border-white/10 z-20 bg-[#0d0008]">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-md" />
-        <motion.div className="absolute inset-y-0 left-0 bg-[#ff007a]" animate={{ width: `${(rawA / total) * 100}%` }} />
-        <motion.div className="absolute inset-y-0 right-0 bg-[#00d1ff]" animate={{ width: `${(rawB / total) * 100}%` }} />
+        <motion.div className="absolute inset-y-0 left-0 bg-[#ff007a]" animate={{ width: `${(rawA / total) * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
+        <motion.div className="absolute inset-y-0 right-0 bg-[#00d1ff]" animate={{ width: `${(rawB / total) * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
       </div>
 
-      {/* ── Info Bar: Scores, Usernames, Timer (Debajo de barra de pelea, compacto) ── */}
-      <div className="w-full flex items-start justify-between px-6 pt-2 pb-1 bg-[#0d0008] relative z-20 shadow-[0_10px_20px_rgba(0,0,0,0.5)] border-b border-white/5">
-        {/* Lado Izquierdo: Puntaje arriba, Usuario abajo */}
-        <div className="flex flex-col items-start min-w-[80px]">
-          <span className="font-black text-2xl text-[#ff007a] leading-none drop-shadow-[0_0_8px_rgba(255,0,122,0.6)]">{displayA.toLocaleString()}</span>
-          <span className="text-white/80 text-[10px] font-bold tracking-wider mt-1">@{playerA?.username || 'Cargando...'}</span>
+      {/* ── Info Bar: Scores, Usernames, Timer (compact, below progress bar) ── */}
+      <div className="w-full flex items-center justify-between px-3 py-1 bg-[#0d0008]/95 relative z-20 border-b border-white/5">
+        {/* Left: Score + Username */}
+        <div className="flex flex-col items-start min-w-[60px]">
+          <span className="font-black text-base text-[#ff007a] leading-none">{displayA.toLocaleString()}</span>
+          <span className="text-white/60 text-[9px] font-semibold tracking-wide mt-0.5 truncate max-w-[70px]">@{playerA?.username || '...'}</span>
         </div>
         
-        {/* Cronómetro Centrado */}
-        <div className="flex items-center justify-center flex-1">
-          <div className="bg-black/90 backdrop-blur-md border border-white/10 px-6 py-1.5 rounded-full shadow-[0_0_15px_rgba(0,0,0,0.8)]">
-            <span className={`font-[family-name:var(--font-orbitron)] font-black text-lg tracking-widest ${isUrgent ? "text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" : "text-white"}`}>
-              {phase === "PREPARING" ? (bothConnected ? `INICIA: ${fmtTime(displayTime)}` : "ESPERANDO...") : 
-               phase === "ENDING" ? `FIN: ${fmtTime(displayTime)}` :
+        {/* Timer Centered */}
+        <div className="flex items-center justify-center">
+          <div className="bg-black/80 border border-white/10 px-3 py-1 rounded-full">
+            <span className={`font-mono font-black text-xs tracking-widest ${isUrgent ? "text-red-500 animate-pulse" : "text-white/90"}`}>
+              {phase === "PREPARING" ? (bothConnected ? `INICIA ${fmtTime(displayTime)}` : "ESPERANDO...") : 
+               phase === "ENDING" ? `FIN ${fmtTime(displayTime)}` :
                fmtTime(displayTime)}
             </span>
           </div>
         </div>
 
-        {/* Lado Derecho: Puntaje arriba, Usuario abajo */}
-        <div className="flex flex-col items-end min-w-[80px]">
-          <span className="font-black text-2xl text-[#00d1ff] leading-none drop-shadow-[0_0_8px_rgba(0,209,255,0.6)]">{displayB.toLocaleString()}</span>
-          <span className="text-white/80 text-[10px] font-bold tracking-wider mt-1">@{playerB?.username || 'Cargando...'}</span>
+        {/* Right: Score + Username */}
+        <div className="flex flex-col items-end min-w-[60px]">
+          <span className="font-black text-base text-[#00d1ff] leading-none">{displayB.toLocaleString()}</span>
+          <span className="text-white/60 text-[9px] font-semibold tracking-wide mt-0.5 truncate max-w-[70px]">@{playerB?.username || '...'}</span>
         </div>
       </div>
 
@@ -690,21 +683,23 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
           {mySide !== "Audience" && <LocalControls phase={phase} />}
 
           <AnimatePresence>
-            {phase === "ENDING" && (
+            {phase === "ENDING" && displayTime >= 10 && (
               <motion.div 
-                initial={{ y: -100, opacity: 0 }}
-                animate={{ y: 20, opacity: 1 }}
-                className="absolute top-20 left-4 right-4 z-[50] flex justify-center pointer-events-none"
+                initial={{ y: -60, opacity: 0 }}
+                animate={{ y: 10, opacity: 1 }}
+                exit={{ y: -60, opacity: 0 }}
+                transition={{ duration: 0.5 }}
+                className="absolute top-4 left-3 right-3 z-[50] flex justify-center pointer-events-none"
               >
-                <div className="cyber-glass rounded-2xl px-6 py-4 border-2 border-[#ffd700] shadow-[0_0_30px_rgba(255,215,0,0.4)] flex items-center gap-4">
-                  <Trophy className="text-[#ffd700]" size={32} />
+                <div className="cyber-glass rounded-xl px-4 py-2.5 border border-[#ffd700]/60 shadow-[0_0_15px_rgba(255,215,0,0.3)] flex items-center gap-3">
+                  <Trophy className="text-[#ffd700]" size={20} />
                   <div>
-                    <p className="text-white/60 text-[10px] uppercase font-black tracking-widest">GANADOR DE LA BATALLA</p>
-                    <h3 className="text-xl font-black text-white">
-                      {rawA > rawB ? playerA?.username : rawB > rawA ? playerB?.username : "¡EMPATE!"}
+                    <p className="text-white/50 text-[8px] uppercase font-black tracking-widest">GANADOR</p>
+                    <h3 className="text-sm font-black text-white">
+                      {rawA > rawB ? `@${playerA?.username}` : rawB > rawA ? `@${playerB?.username}` : "¡EMPATE!"}
                     </h3>
                     {rawA !== rawB && (
-                      <p className="text-[#ffd700] font-bold text-sm">+{fmtBCR(rawA + rawB)} BCR Ganados</p>
+                      <p className="text-[#ffd700] font-bold text-[10px]">+{fmtBCR(rawA + rawB)}</p>
                     )}
                   </div>
                 </div>
@@ -831,53 +826,48 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
               initial={{ y: 50, opacity: 0, scale: 0.9 }} 
               animate={{ y: 0, opacity: 1, scale: 1 }} 
               transition={{ type: "spring", damping: 20, stiffness: 300 }}
-              className="relative bg-black/60 backdrop-blur-3xl border-2 rounded-[40px] p-8 text-center shadow-[0_0_50px_rgba(0,0,0,0.8)] max-w-sm w-full flex flex-col" 
+              className="relative bg-black/60 backdrop-blur-3xl border-2 rounded-[32px] p-6 text-center shadow-[0_0_50px_rgba(0,0,0,0.8)] max-w-xs w-full flex flex-col" 
               style={{ 
                 borderColor: winData.side === "A" ? "#ff007a" : winData.side === "B" ? "#00d1ff" : "rgba(255,255,255,0.2)",
                 boxShadow: `0 0 30px ${winData.side === "A" ? "#ff007a40" : winData.side === "B" ? "#00d1ff40" : "rgba(255,255,255,0.1)"}`
               }}
             >
-              <div className="mb-6">
-                <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.5em] mb-3">Batalla Finalizada</p>
+              <div className="mb-5">
+                <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.4em] mb-3">Fin de Batalla</p>
                 {winData.profile ? (
-                  <div className="flex flex-col items-center justify-center gap-3">
-                    <div className="w-20 h-20 rounded-full overflow-hidden border-2 shadow-[0_0_20px_rgba(255,255,255,0.2)]" style={{ borderColor: winData.side === "A" ? "#ff007a" : "#00d1ff" }}>
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 shadow-[0_0_15px_rgba(255,255,255,0.2)]" style={{ borderColor: winData.side === "A" ? "#ff007a" : "#00d1ff" }}>
                       <img src={winData.profile.avatar_url || "https://i.pravatar.cc/150"} className="w-full h-full object-cover" />
                     </div>
-                    <h1 className="text-3xl font-black italic tracking-tight uppercase text-white" style={{ textShadow: `0 0 15px ${winData.side === "A" ? "#ff007a" : "#00d1ff"}` }}>
+                    <h1 className="text-xl font-black italic tracking-tight uppercase text-white" style={{ textShadow: `0 0 10px ${winData.side === "A" ? "#ff007a" : "#00d1ff"}` }}>
                       ¡GANADOR @{winData.profile.username}!
                     </h1>
                     {mySide === winData.side && (
-                      <p className="text-lg font-bold text-[#00ffcc] drop-shadow-[0_0_8px_rgba(0,255,204,0.5)]">
-                        Ganaste: +{fmtBCR(rawA + rawB)}
+                      <p className="text-sm font-bold text-[#00ffcc]">
+                        +{fmtBCR(rawA + rawB)} ganados
                       </p>
                     )}
                     {mySide !== "Audience" && mySide !== winData.side && (
-                      <p className="text-lg font-bold text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
-                        Perdiste: -{fmtWCR(mySide === "A" ? rawA : rawB)}
+                      <p className="text-sm font-bold text-red-500">
+                        Perdiste
                       </p>
                     )}
                   </div>
                 ) : (
-                   <div className="flex flex-col items-center justify-center gap-3">
-                     <h1 className="text-4xl font-black italic tracking-tight uppercase text-white drop-shadow-[0_0_15px_#fff]">EMPATE</h1>
-                     {mySide !== "Audience" && (
-                       <p className="text-lg font-bold text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]">
-                         {fmtWCR(0)}
-                       </p>
-                     )}
+                   <div className="flex flex-col items-center justify-center gap-2">
+                     <h1 className="text-3xl font-black italic uppercase text-white">EMPATE</h1>
                    </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center">
-                  <p className="text-[#ff007a] text-[10px] font-black uppercase tracking-widest mb-2">Lado A</p>
-                  <p className="text-white text-xl font-black truncate w-full">{rawA.toLocaleString()}</p>
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="bg-white/[0.03] border border-white/10 rounded-xl p-3 flex flex-col items-center">
+                  <p className="text-[#ff007a] text-[9px] font-black uppercase tracking-widest mb-1">@{playerA?.username || 'A'}</p>
+                  <p className="text-white text-lg font-black">{rawA.toLocaleString()}</p>
                 </div>
-                <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center">
-                  <p className="text-[#00d1ff] text-[10px] font-black uppercase tracking-widest mb-2">Lado B</p>
-                  <p className="text-white text-xl font-black truncate w-full">{rawB.toLocaleString()}</p>
+                <div className="bg-white/[0.03] border border-white/10 rounded-xl p-3 flex flex-col items-center">
+                  <p className="text-[#00d1ff] text-[9px] font-black uppercase tracking-widest mb-1">@{playerB?.username || 'B'}</p>
+                  <p className="text-white text-lg font-black">{rawB.toLocaleString()}</p>
                 </div>
               </div>
 
@@ -888,33 +878,28 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                     whileTap={{ scale: 0.98 }} 
                     onClick={handleRematch} 
                     disabled={(mySide === "A" && rematchA) || (mySide === "B" && rematchB)}
-                    className="w-full py-4 mb-2 bg-gradient-to-r from-[#ff007a] to-[#00d1ff] rounded-[20px] text-white font-black uppercase tracking-[0.2em] text-xs shadow-[0_10px_20px_rgba(0,0,0,0.3)] border border-white/10 disabled:opacity-50"
+                    className="w-full py-3.5 mb-2 bg-gradient-to-r from-[#ff007a] to-[#00d1ff] rounded-2xl text-white font-black uppercase tracking-[0.15em] text-[11px] shadow-[0_8px_16px_rgba(0,0,0,0.3)] border border-white/10 disabled:opacity-50"
                   >
-                    {((mySide === "A" && rematchA) || (mySide === "B" && rematchB)) ? "ESPERANDO AL RIVAL..." : "SOLICITAR REVANCHA"}
+                    {((mySide === "A" && rematchA) || (mySide === "B" && rematchB)) ? "ESPERANDO AL RIVAL..." : "QUIERO REVANCHA"}
                   </motion.button>
                   <motion.button 
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }} 
                     onClick={handleExitBattle} 
-                    className="w-full py-3 bg-transparent border border-white/20 rounded-[20px] text-white/60 font-bold uppercase tracking-widest text-[10px] hover:bg-white/5 transition-colors"
+                    className="w-full py-3 bg-transparent border border-white/20 rounded-2xl text-white/60 font-bold uppercase tracking-widest text-[10px] hover:bg-white/5 transition-colors"
                   >
-                    SALIR AL DASHBOARD
+                    IR AL DASHBOARD
                   </motion.button>
                 </>
               ) : (
-                <div className="flex flex-col gap-2 mt-4">
-                  <div className="text-white/50 text-xs font-bold uppercase tracking-widest text-center border border-white/10 p-3 rounded-xl bg-black/30">
-                    Esperando a que los jugadores decidan...
-                  </div>
-                  <motion.button 
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }} 
-                    onClick={() => router.push("/dashboard")} 
-                    className="w-full py-3 bg-transparent border border-white/20 rounded-[15px] text-white/60 font-bold uppercase tracking-widest text-[10px] hover:bg-white/5 transition-colors mt-2"
-                  >
-                    SALIR AL DASHBOARD
-                  </motion.button>
-                </div>
+                <motion.button 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }} 
+                  onClick={handleExitBattle} 
+                  className="w-full py-3 bg-transparent border border-white/20 rounded-2xl text-white/60 font-bold uppercase tracking-widest text-[10px] hover:bg-white/5 transition-colors"
+                >
+                  IR AL DASHBOARD
+                </motion.button>
               )}
             </motion.div>
           </motion.div>
