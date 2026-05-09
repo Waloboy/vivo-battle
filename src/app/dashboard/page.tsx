@@ -435,9 +435,14 @@ export default function ExploreDashboard() {
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#ff007a] to-[#00d1ff] p-[1px]"><div className="w-full h-full rounded-full bg-[#0a0a0a] flex items-center justify-center"><span className="text-[10px] font-black text-white/50">{r.username[0].toUpperCase()}</span></div></div>
                       <span className="text-sm font-semibold text-white">@{r.username}</span>
                     </div>
-                    <button onClick={() => sendChallenge(r.id)} disabled={challengeSending === r.id || challengeSent.has(r.id)} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${challengeSent.has(r.id) ? "bg-white/5 text-white/30" : "bg-[#ff007a]/15 text-[#ff007a] border border-[#ff007a]/20 hover:bg-[#ff007a]/25"}`}>
-                      {challengeSending === r.id ? <Loader2 size={12} className="animate-spin" /> : challengeSent.has(r.id) ? <><Check size={12} /> Enviado</> : <><Swords size={12} /> Retar</>}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => toggleFollow(r.id)} disabled={followingInProgress.has(r.id)} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${followedUsers.has(r.id) ? "bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white" : "bg-[#00d1ff]/15 text-[#00d1ff] border border-[#00d1ff]/20 hover:bg-[#00d1ff]/25"}`}>
+                        {followingInProgress.has(r.id) ? <Loader2 size={12} className="animate-spin" /> : followedUsers.has(r.id) ? <><Check size={12} /> Siguiendo</> : <><UserPlus size={12} /> Seguir</>}
+                      </button>
+                      <button onClick={() => sendChallenge(r.id)} disabled={challengeSending === r.id || challengeSent.has(r.id)} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${challengeSent.has(r.id) ? "bg-white/5 text-white/30" : "bg-[#ff007a]/15 text-[#ff007a] border border-[#ff007a]/20 hover:bg-[#ff007a]/25"}`}>
+                        {challengeSending === r.id ? <Loader2 size={12} className="animate-spin" /> : challengeSent.has(r.id) ? <><Check size={12} /> Enviado</> : <><Swords size={12} /> Retar</>}
+                      </button>
+                    </div>
                   </div>
                 ))}
                 <button onClick={() => { setSearchOpen(false); setSearchQuery(""); }} className="w-full py-2 text-white/20 text-[10px] hover:bg-white/[0.02] transition-colors">Cerrar</button>

@@ -21,11 +21,24 @@ export default function RankingPage() {
       if (user) setCurrentUserId(user.id);
 
       // Fetch top 100 users ordered by points (historical accumulated score)
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from("profiles")
         .select("id, username, avatar_url, points, wins, losses, draws")
         .order("points", { ascending: false, nullsFirst: false })
         .limit(100);
+
+      // Fallback: if no one has points, show users by creation date
+      if (!error && (!data || data.length === 0 || data.every((u: any) => !u.points || u.points === 0))) {
+        const fallback = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url, points, wins, losses, draws")
+          .order("created_at", { ascending: false })
+          .limit(100);
+        if (!fallback.error && fallback.data) {
+          data = fallback.data;
+          error = fallback.error;
+        }
+      }
 
       if (!error && data) {
         setUsers(data);

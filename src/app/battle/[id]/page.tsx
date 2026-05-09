@@ -313,13 +313,13 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
             const loserId = rawA > rawB ? battleData?.player_b_id : rawB > rawA ? battleData?.player_a_id : null;
             const totalPoints = rawA + rawB;
 
-            // Save final scores to battle record
+            // AGGRESSIVE AUTO-CLOSE: mark battle as finished IMMEDIATELY
             await supabase.from("battles").update({
               score_a: rawA, score_b: rawB,
+              is_active: false,
             }).eq("id", id);
 
             if (winnerId) {
-              // Add points to winner's profile
               const { data: winnerProfile } = await supabase.from("profiles").select("points, wins").eq("id", winnerId).single();
               if (winnerProfile) {
                 await supabase.from("profiles").update({
@@ -329,7 +329,6 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
               }
             }
             if (loserId) {
-              // Increment losses for loser
               const { data: loserProfile } = await supabase.from("profiles").select("losses").eq("id", loserId).single();
               if (loserProfile) {
                 await supabase.from("profiles").update({
@@ -338,14 +337,13 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
               }
             }
             if (!winnerId && !loserId) {
-              // Draw — increment draws for both
               for (const pid of [battleData?.player_a_id, battleData?.player_b_id]) {
                 if (!pid) continue;
                 const { data: p } = await supabase.from("profiles").select("draws").eq("id", pid).single();
                 if (p) await supabase.from("profiles").update({ draws: (p.draws || 0) + 1 }).eq("id", pid);
               }
             }
-            console.log(`[Battle] Points settled: winner=${winnerId}, total=${totalPoints}`);
+            console.log(`[Battle] ✅ Settled & closed: winner=${winnerId}, total=${totalPoints}`);
           } catch (err) {
             console.error("[Battle] Point settlement error:", err);
           }
@@ -472,9 +470,8 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const handleExitBattle = async () => {
     // Broadcast exit to the opponent so they don't get stuck
     await supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "battle_exit", payload: { side: mySide } });
-    if (mySide === "A") {
-       await supabase.from("battles").update({ is_active: false }).eq("id", id);
-    }
+    // Both sides deactivate — whoever exits first kills the battle
+    await supabase.from("battles").update({ is_active: false }).eq("id", id);
     router.push("/dashboard");
   };
 
@@ -486,7 +483,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const winData = getWinner();
 
   return (
-    <motion.div animate={shaking ? { x: [0, -8, 8, -6, 6, -3, 3, 0], y: [0, 4, -4, 3, -3, 1, -1, 0] } : {}} transition={{ duration: 1 }} className="flex-1 flex flex-col p-2 pt-1 max-w-7xl w-full mx-auto relative overflow-hidden">
+    <motion.div animate={shaking ? { x: [0, -8, 8, -6, 6, -3, 3, 0], y: [0, 4, -4, 3, -3, 1, -1, 0] } : {}} transition={{ duration: 1 }} className="flex-1 flex flex-col max-w-7xl w-full mx-auto relative overflow-hidden">
       <AnimatePresence>
         {takeover && (
           <motion.div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -498,11 +495,11 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex items-center justify-end gap-2 px-2">
         <Wallet size={13} className="text-[#00d1ff]" />
         <span className="text-xs font-bold text-[#00d1ff]">{fmtCR(balance)}</span>
       </div>
-      <div className="relative w-full h-10 rounded-full overflow-hidden mb-1 border border-white/10">
+      <div className="relative w-full h-8 overflow-hidden border-b border-white/10">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-md" />
         <motion.div className="absolute inset-y-0 left-0 bg-[#ff007a]" animate={{ width: `${(rawA / total) * 100}%` }} />
         <motion.div className="absolute inset-y-0 right-0 bg-[#00d1ff]" animate={{ width: `${(rawB / total) * 100}%` }} />
@@ -528,14 +525,14 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         connectOptions={{ autoSubscribe: true }}
         video={true}
         audio={true}
-        className="flex-1 flex flex-col min-h-[220px]"
+        className="flex flex-col flex-[2] min-h-0"
       >
         <RoomWatcher playerA={playerA?.username} playerB={playerB?.username} onBothConnected={setBothConnected} />
         
-        <div className="grid grid-cols-2 gap-2 flex-1 relative">
+        <div className="grid grid-cols-2 gap-0 flex-1 relative min-h-0">
           {mySide !== "Audience" && <LocalControls isWarmup={phase === "warmup" || phase === "waiting"} />}
 
-          <div className={`relative rounded-3xl overflow-hidden border border-[#ff007a]/15 select-none ${phase === "battle" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("A", e)}>
+          <div className={`relative overflow-hidden select-none aspect-[3/4] ${phase === "battle" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("A", e)}>
             <div className="absolute inset-0 bg-[#0d0008]" />
             <BattleVideo expectedUsername={playerA?.username} phase={phase} />
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[1]">
@@ -546,7 +543,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                 </>
               )}
             </div>
-            <motion.div className="absolute inset-0 z-[1] rounded-3xl pointer-events-none" animate={glowA ? { boxShadow: ["inset 0 0 40px #ff007a40", "inset 0 0 80px #ff007a60", "inset 0 0 40px #ff007a40"] } : {}} />
+            <motion.div className="absolute inset-0 z-[1] pointer-events-none" animate={glowA ? { boxShadow: ["inset 0 0 40px #ff007a40", "inset 0 0 80px #ff007a60", "inset 0 0 40px #ff007a40"] } : {}} />
             <div className="absolute top-3 left-3 z-10 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 pointer-events-none"><span className="font-black text-sm text-[#ff007a]">{displayA.toLocaleString()}</span></div>
             <AnimatePresence>
               {tapsA.map(t => (
@@ -555,7 +552,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
             </AnimatePresence>
           </div>
 
-          <div className={`relative rounded-3xl overflow-hidden border border-[#00d1ff]/15 select-none ${phase === "battle" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("B", e)}>
+          <div className={`relative overflow-hidden select-none aspect-[3/4] border-l border-white/10 ${phase === "battle" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("B", e)}>
             <div className="absolute inset-0 bg-[#000810]" />
             <BattleVideo expectedUsername={playerB?.username} phase={phase} />
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[1]">
@@ -566,7 +563,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                 </>
               )}
             </div>
-            <motion.div className="absolute inset-0 z-[1] rounded-3xl pointer-events-none" animate={glowB ? { boxShadow: ["inset 0 0 40px #00d1ff40", "inset 0 0 80px #00d1ff60", "inset 0 0 40px #00d1ff40"] } : {}} />
+            <motion.div className="absolute inset-0 z-[1] pointer-events-none" animate={glowB ? { boxShadow: ["inset 0 0 40px #00d1ff40", "inset 0 0 80px #00d1ff60", "inset 0 0 40px #00d1ff40"] } : {}} />
             <div className="absolute top-3 right-3 z-10 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 pointer-events-none"><span className="font-black text-sm text-[#00d1ff]">{displayB.toLocaleString()}</span></div>
             <AnimatePresence>
               {tapsB.map(t => (
@@ -577,7 +574,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         </div>
       </LiveKitRoom>
 
-      <div className="mt-1 flex-1 min-h-[140px] bg-black/40 backdrop-blur-xl rounded-[28px] p-3 flex flex-col border border-white/5 relative">
+      <div className="flex-1 min-h-[100px] bg-black/40 backdrop-blur-xl p-2 flex flex-col border-t border-white/5 relative">
         <div className="flex-1 overflow-y-auto space-y-1.5 mb-2 pr-1 flex flex-col">
           {messages.map((msg: any) => {
             const isElite = msg.text?.includes("Dominion") || msg.text?.includes("Satellite") || msg.text?.includes("Hypernova") || msg.text?.includes("VIVO Supreme");
