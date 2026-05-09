@@ -61,7 +61,7 @@ export default function AdminDashboard() {
 
   const initAdmin = async () => {
     const { data: rateRow } = await supabase.from("app_config").select("value").eq("key", "bcv_rate").single();
-    if (rateRow?.value) { const r = parseFloat(rateRow.value); setBcvRate(r); setExchangeRate(Math.round(r / 100 * 100) / 100); }
+    if (rateRow?.value) { const r = parseFloat(rateRow.value); setBcvRate(r); setExchangeRate(r); }
     await fetchTransactions();
     setDataLoading(false);
   };
@@ -103,8 +103,7 @@ export default function AdminDashboard() {
     for (const row of map.values()) {
       row.user_share_cr = Math.floor(row.total_cr * 0.6);
       row.app_share_cr = row.total_cr - row.user_share_cr;
-      // exchangeRate = Bs per 100 CR
-      row.user_payout_bs = (row.user_share_cr / 100) * exchangeRate;
+      row.user_payout_bs = crToBs(row.user_share_cr, bcvRate || exchangeRate);
     }
     setSettlement(Array.from(map.values()).sort((a, b) => b.total_cr - a.total_cr));
     setSettLoading(false);
@@ -142,7 +141,7 @@ export default function AdminDashboard() {
     for (const row of map.values()) {
       row.user_share_cr = Math.floor(row.total_cr * 0.6);
       row.app_share_cr = row.total_cr - row.user_share_cr;
-      row.user_payout_bs = (row.user_share_cr / 100) * exchangeRate;
+      row.user_payout_bs = crToBs(row.user_share_cr, bcvRate || exchangeRate);
     }
     setBcrSettlement(Array.from(map.values()).sort((a, b) => b.total_cr - a.total_cr));
     setBcrLoading(false);
@@ -438,7 +437,7 @@ export default function AdminDashboard() {
               <p className="text-white/30 text-xs mt-0.5">100 CR = X Bs a pagar al usuario (60% del gift)</p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-white/40 text-sm">100 CR =</span>
+              <span className="text-white/40 text-sm">1 USD =</span>
               <input id="admin-exchange-rate" name="admin-exchange-rate" type="number" value={exchangeRate}
                 onChange={e => setExchangeRate(Number(e.target.value))}
                 className="w-24 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white font-bold text-center focus:outline-none focus:border-[#ffd700]/50"/>

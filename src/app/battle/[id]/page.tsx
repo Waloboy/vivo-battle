@@ -20,6 +20,7 @@ import '@livekit/components-styles';
 
 interface FloatTap { id: number; x: number; y: number }
 const BATTLE_DURATION = 320; // 2:00 prep + 3:00 battle + 20s farewell
+type BattlePhase = "PREPARING" | "BATTLE" | "ENDING" | "FINISHED";
 
 interface Profile {
   id: string;
@@ -54,10 +55,10 @@ function RoomWatcher({ playerA, playerB, onBothConnected }: { playerA?: string, 
 }
 
 interface BattleVideoProps {
-  expectedUsername?: string;
-  phase: string;
-  playerA?: Profile | null;
-  playerB?: Profile | null;
+  expectedUsername: string;
+  phase: BattlePhase;
+  playerA: Profile | null;
+  playerB: Profile | null;
   displayTime: number;
   isCountdown: boolean;
 }
@@ -174,7 +175,7 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
 }
 
 // --- LiveKit Local Controls (Mute & Flip Camera) ---
-function LocalControls({ phase }: { phase: string }) {
+function LocalControls({ phase }: { phase: BattlePhase }) {
   const isWarmup = phase === "PREPARING";
   const { localParticipant } = useLocalParticipant();
   const [isMuted, setIsMuted] = useState(false);
@@ -267,7 +268,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const pendingScoreB = useRef(0);
   const lastTapSound = useRef(0);
 
-  const phase = !bothConnected || timeLeft > 200 ? "PREPARING" : 
+  const phase: BattlePhase = !bothConnected || timeLeft > 200 ? "PREPARING" : 
                 (timeLeft > 20 ? "BATTLE" : 
                  timeLeft > 0 ? "ENDING" : "FINISHED");
 
@@ -702,7 +703,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
             <div className="absolute inset-0 bg-[#0d0008]" />
             <div className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full absolute inset-0">
               <BattleVideo 
-                expectedUsername={playerA?.username} 
+                expectedUsername={playerA?.username || ""} 
                 phase={phase} 
                 playerA={playerA}
                 playerB={playerB}
@@ -730,7 +731,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
             <div className="absolute inset-0 bg-[#000810]" />
             <div className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full absolute inset-0">
               <BattleVideo 
-                expectedUsername={playerB?.username} 
+                expectedUsername={playerB?.username || ""} 
                 phase={phase} 
                 playerA={playerA}
                 playerB={playerB}

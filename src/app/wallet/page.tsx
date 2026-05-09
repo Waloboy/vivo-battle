@@ -76,8 +76,9 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) { alert("Sesión expirada."); return; }
     setIsSubmitting(true);
-    // Tasa: 100 CR = 5 Bs  =>  1 Bs = 20 CR
-    const amountCredits = Math.floor(parseFloat(amountBs.replace(",", ".")) * 20);
+    // Correct Conversion: 1 CR = (bcvRate / 100) Bs. => amountCredits = amountBs / (bcvRate / 100)
+    const rate = (bcvRate || 500) / 100;
+    const amountCredits = Math.floor(parseFloat(amountBs.replace(",", ".")) / rate);
     const { error } = await supabase.from("transactions").insert({
       user_id: currentUser.id, type: "DEPOSIT_PENDING",
       amount_bs: parseFloat(amountBs.replace(",", ".")), amount_credits: amountCredits,
@@ -100,8 +101,9 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
     if (!currentUser) { alert("Sesión expirada."); return; }
     setIsSubmitting(true);
     
-    // Tasa: 100 CR = 5 Bs  =>  1 Bs = 20 CR
-    const grossBsAmount = amountCredits / 20;
+    // Correct Conversion: 1 CR = (bcvRate / 100) Bs. => grossBsAmount = amountCredits * (bcvRate / 100)
+    const rate = (bcvRate || 500) / 100;
+    const grossBsAmount = amountCredits * rate;
     const netBsAmount = grossBsAmount * 0.85; // Descuento 15%
     
     const { error } = await supabase.from("transactions").insert({
@@ -301,7 +303,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
                 {amountBs && !isNaN(parseFloat(amountBs.replace(",", "."))) && (
                   <p className="text-[12px] font-medium text-[#00d1ff] mt-2 flex items-center justify-between bg-[#00d1ff]/10 p-2 rounded-lg border border-[#00d1ff]/20">
                     <span>Recibirás:</span>
-                    <span className="font-black text-sm">{fmtWCR(Math.floor(parseFloat(amountBs.replace(",", ".")) * 20))} WCR</span>
+                    <span className="font-black text-sm">{fmtWCR(Math.floor(parseFloat(amountBs.replace(",", ".")) / ((bcvRate || 500) / 100)))} WCR</span>
                   </p>
                 )}
               </div>
@@ -345,24 +347,24 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
               </div>
             )}
             <div>
-              <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Créditos a Retirar (WCR)</label>
+              <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Créditos a Retirar (BCR)</label>
               <input id="wallet-withdraw-amount" name="wallet-withdraw-amount" type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Ej. 5000"
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors" />
-              <p className="text-[11px] text-white/30 mt-1">Saldo WCR: {fmtWCR(dualBal.wallet_credits)}</p>
+              <p className="text-[11px] text-white/30 mt-1">Saldo BCR disponible: {fmtWCR(dualBal.battle_credits)}</p>
               
               {withdrawAmount && !isNaN(parseInt(withdrawAmount)) && (
                 <div className="mt-3 space-y-2 p-3 bg-white/5 rounded-xl border border-white/10">
                   <div className="flex justify-between text-xs text-white/60">
                     <span>Monto bruto:</span>
-                    <span>{fmtBs(parseInt(withdrawAmount) / 20)}</span>
+                    <span>{fmtBs(parseInt(withdrawAmount) * ((bcvRate || 500) / 100))}</span>
                   </div>
                   <div className="flex justify-between text-xs text-[#ff007a]">
                     <span>Comisión (15%):</span>
-                    <span>- {fmtBs((parseInt(withdrawAmount) / 20) * 0.15)}</span>
+                    <span>- {fmtBs((parseInt(withdrawAmount) * ((bcvRate || 500) / 100)) * 0.15)}</span>
                   </div>
                   <div className="pt-2 border-t border-white/10 flex justify-between font-bold text-sm text-emerald-400">
                     <span>Neto a recibir:</span>
-                    <span>{fmtBs((parseInt(withdrawAmount) / 20) * 0.85)}</span>
+                    <span>{fmtBs((parseInt(withdrawAmount) * ((bcvRate || 500) / 100)) * 0.85)}</span>
                   </div>
                 </div>
               )}
