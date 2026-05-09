@@ -5,13 +5,17 @@ export async function GET(req: NextRequest) {
   try {
     const room = req.nextUrl.searchParams.get('room')?.trim();
     const username = req.nextUrl.searchParams.get('username')?.trim();
-    const role = req.nextUrl.searchParams.get('role');
+    const rawRole = req.nextUrl.searchParams.get('role')?.trim() || '';
     
-    console.log(`[LiveKit Token API] Request received - Room: "${room}", Username: "${username}", Role: "${role}"`);
+    // Normalize role: accept any casing (audience, Audience, AUDIENCE → audience)
+    const normalizedRole = rawRole.toLowerCase();
+    
+    console.log(`[LiveKit Token API] Request - Room: "${room}", Username: "${username}", Role: "${rawRole}" → normalized: "${normalizedRole}"`);
 
     if (!room) {
       return NextResponse.json({ error: 'Missing "room" query parameter' }, { status: 400 });
-    } else if (!username) {
+    }
+    if (!username) {
       return NextResponse.json({ error: 'Missing "username" query parameter' }, { status: 400 });
     }
 
@@ -19,29 +23,46 @@ export async function GET(req: NextRequest) {
     const apiSecret = process.env.LIVEKIT_API_SECRET;
     const wsUrl = process.env.LIVEKIT_URL;
 
+    console.log('[LiveKit Token API] Env check:', {
+      hasApiKey: !!apiKey,
+      apiKeyLength: apiKey?.length || 0,
+      hasApiSecret: !!apiSecret,
+      apiSecretLength: apiSecret?.length || 0,
+      hasWsUrl: !!wsUrl,
+      wsUrl: wsUrl || 'NOT SET',
+    });
+
     if (!apiKey || !apiSecret || !wsUrl) {
-      console.error('[LiveKit Token API] Server misconfigured. Checking environment variables:', {
-        hasApiKey: !!apiKey,
-        hasApiSecret: !!apiSecret,
-        hasWsUrl: !!wsUrl
-      });
-      return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Server misconfigured: missing LIVEKIT env vars', detail: { hasApiKey: !!apiKey, hasApiSecret: !!apiSecret, hasWsUrl: !!wsUrl } },
+        { status: 500 }
+      );
     }
 
     const at = new AccessToken(apiKey, apiSecret, {
       identity: username,
-      ttl: '10m', // Token expires in 10 minutes
+      ttl: '10m',
     });
 
-    const canPublish = role !== 'Audience';
-    at.addGrant({ roomJoin: true, room: room, canPublish, canSubscribe: true, canPublishData: true });
+    // Audience can't publish but everyone else can
+    const canPublish = normalizedRole !== 'audience';
+    at.addGrant({
+      roomJoin: true,
+      room: room,
+      canPublish,
+      canSubscribe: true,
+      canPublishData: true,
+    });
 
     const token = await at.toJwt();
-    console.log(`[LiveKit Token API] Token successfully generated for ${username}`);
+    console.log(`[LiveKit Token API] ✅ Token generated for "${username}" in room "${room}" (canPublish=${canPublish})`);
     
     return NextResponse.json({ token });
-  } catch (error) {
-    console.error('[LiveKit Token API] Unexpected Error:', error);
-    return NextResponse.json({ error: 'Internal server error while generating token' }, { status: 500 });
+  } catch (error: any) {
+    // Surface the REAL error message so it's visible in Vercel logs AND in the client response
+    const message = error?.message || 'Unknown error generating token';
+    const stack = error?.stack || '';
+    console.error('[LiveKit Token API] ❌ CRASH:', message, '\nStack:', stack);
+    return NextResponse.json({ error: message, stack: process.env.NODE_ENV === 'development' ? stack : undefined }, { status: 500 });
   }
 }

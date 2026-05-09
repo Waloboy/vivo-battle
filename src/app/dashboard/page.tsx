@@ -144,21 +144,38 @@ export default function ExploreDashboard() {
   // ── Initialize user & follows ──
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user || !user.id) {
+        console.warn("[Dashboard] No authenticated user or auth error:", authError?.message);
+        return;
+      }
+
+      // Validate UUID format before querying
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(user.id)) {
+        console.error("[Dashboard] Invalid user UUID format:", user.id);
+        return;
+      }
+
       setUser(user);
 
-      // Load follows
-      const { data: follows } = await supabase
+      // Load follows — only if we have a valid user ID
+      const { data: follows, error: followsError } = await supabase
         .from("follows")
         .select("followed_id")
         .eq("follower_id", user.id);
 
-      if (follows) {
-        setFollowedUsers(new Set(follows.map((f: any) => f.followed_id)));
+      if (followsError) {
+        console.error("[Dashboard] Follows query error:", followsError.message);
+      } else if (follows) {
+        // Filter out any malformed followed_ids
+        const validFollows = follows
+          .map((f: any) => f.followed_id)
+          .filter((id: string) => id && uuidRegex.test(id));
+        setFollowedUsers(new Set(validFollows));
       }
     })();
-  }, []);
+  }, [supabase]);
 
   // ── Fetch battles ──
   const fetchBattles = useCallback(async (page: number, tab: TabKey, append = false) => {
@@ -186,6 +203,8 @@ export default function ExploreDashboard() {
     // For "following" tab, filter by followed users
     if (tab === "following" && followedUsers.size > 0) {
       const followedArray = Array.from(followedUsers);
+      // Build proper Supabase filter — wrap each UUID in quotes for .in()
+      const quotedIds = followedArray.map(id => `"${id}"`).join(",");
       query = supabase
         .from("battles")
         .select(`
@@ -195,7 +214,7 @@ export default function ExploreDashboard() {
         `)
         .eq("is_active", true)
         .gte("started_at", oneHourAgo)
-        .or(`player_a_id.in.(${followedArray.join(",")}),player_b_id.in.(${followedArray.join(",")})`)
+        .or(`player_a_id.in.(${quotedIds}),player_b_id.in.(${quotedIds})`)
         .order("score_a", { ascending: false })
         .range(from, to);
     }
