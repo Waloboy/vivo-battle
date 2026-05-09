@@ -79,7 +79,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
     // Tasa: 100 CR = 5 Bs  =>  1 Bs = 20 CR
     const amountCredits = Math.floor(parseFloat(amountBs.replace(",", ".")) * 20);
     const { error } = await supabase.from("transactions").insert({
-      user_id: currentUser.id, type: "deposit",
+      user_id: currentUser.id, type: "DEPOSIT_PENDING",
       amount_bs: parseFloat(amountBs.replace(",", ".")), amount_credits: amountCredits,
       reference_number: refNumber, status: "pending"
     });
@@ -91,7 +91,10 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
   const handleWithdrawSubmit = async () => {
     if (!withdrawAmount) return;
     const amountCredits = parseInt(withdrawAmount);
-    if (amountCredits > dualBal.wallet_credits) { alert(`Solo puedes retirar de tu Billetera (WCR). Tienes ${fmtWCR(dualBal.wallet_credits)} WCR disponibles.`); return; }
+    if (amountCredits > dualBal.battle_credits) { 
+      alert(`Solo puedes retirar de tu Saldo de Batalla (BCR). Tienes ${fmtWCR(dualBal.battle_credits)} BCR disponibles.`); 
+      return; 
+    }
     if (!profile?.phone_number) { alert("Configura tus datos bancarios en el Perfil."); return; }
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) { alert("Sesión expirada."); return; }
@@ -105,6 +108,14 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
       user_id: currentUser.id, type: "withdrawal",
       amount_credits: amountCredits, amount_bs: netBsAmount, status: "pending"
     });
+
+    if (!error) {
+      // Deduct from source of truth immediately
+      await supabase.from("profiles").update({
+        battle_credits: Math.max(0, (dualBal.battle_credits || 0) - amountCredits)
+      }).eq("id", currentUser.id);
+    }
+
     setIsSubmitting(false);
     if (error) { alert("Error: " + error.message); }
     else { setSuccessMsg("¡Retiro solicitado! En breve el admin procesará tu pago."); setWithdrawAmount(""); fetchData(); }
@@ -208,19 +219,24 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
             <div key={txn.id} className="flex items-center justify-between px-4 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className={`p-2 rounded-lg flex-shrink-0 ${
-                  txn.type === "gift" ? "bg-[#e056fd]/10 text-[#e056fd]" :
+                  txn.type === "GIFT_SENT" || txn.type === "gift" ? "bg-[#e056fd]/10 text-[#e056fd]" :
                   txn.type === "withdrawal" ? "bg-white/10 text-white" :
+                  txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "bg-[#ffd700]/10 text-[#ffd700]" :
                   "bg-[#00d1ff]/10 text-[#00d1ff]"
                 }`}>
-                  {txn.type === "gift" ? <Sparkles size={16}/> : txn.type === "withdrawal" ? <ArrowUpRight size={16}/> : <Plus size={16}/>}
+                  {txn.type === "GIFT_SENT" || txn.type === "gift" ? <Sparkles size={16}/> : 
+                   txn.type === "withdrawal" ? <ArrowUpRight size={16}/> : 
+                   txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? <Sparkles size={16}/> : 
+                   <Plus size={16}/>}
                 </div>
                 <div className="min-w-0">
                   <p className="font-medium text-sm truncate">
-                    {txn.type === "gift" ? (txn.reference_number || "Gift") :
-                     txn.type === "withdrawal" ? "Retiro" : 
+                    {txn.type === "GIFT_SENT" || txn.type === "gift" ? (txn.reference_number || "Envío de Regalo") :
+                     txn.type === "withdrawal" ? "Retiro de Ganancias" : 
+                     txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? (txn.reference_number || "BATALLA GANADA") :
                      txn.type === "bonus" ? "Bono / Recompensa" :
                      txn.type === "manual_adjustment" ? "Ajuste de Saldo" :
-                     "Recarga Pago Móvil"}
+                     "Depósito / Pago Móvil"}
                   </p>
                   <p className="text-[11px] text-white/30">
                     {new Date(txn.created_at).toLocaleDateString("es-VE")} ·{" "}
@@ -231,10 +247,12 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
                 </div>
               </div>
               <div className={`font-bold text-sm flex-shrink-0 ${
-                txn.type === "gift" ? "text-[#e056fd]" :
-                txn.type === "withdrawal" ? "text-white/70" : "text-[#00d1ff]"
+                txn.type === "GIFT_SENT" || txn.type === "gift" ? "text-[#e056fd]" :
+                txn.type === "withdrawal" ? "text-white/70" : 
+                txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" :
+                "text-[#00d1ff]"
               }`}>
-                {txn.type === "withdrawal" || txn.type === "gift" ? "-" : "+"}{txn.amount_credits.toLocaleString("es-VE")}
+                {txn.type === "withdrawal" || txn.type === "GIFT_SENT" || txn.type === "gift" ? "-" : "+"}{Math.abs(txn.amount_credits).toLocaleString("es-VE")}
                 <span className="text-[10px] font-normal opacity-40 ml-0.5">CR</span>
               </div>
             </div>

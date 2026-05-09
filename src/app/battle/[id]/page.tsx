@@ -5,7 +5,7 @@ import { setLogLevel } from "livekit-client";
 
 setLogLevel("debug");
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Wallet, Gift, X, Heart, Mic, MicOff, RefreshCw } from "lucide-react";
+import { Send, Wallet, Gift, X, Heart, Mic, MicOff, RefreshCw, Trophy, Swords } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
@@ -19,7 +19,20 @@ import { Track } from 'livekit-client';
 import '@livekit/components-styles';
 
 interface FloatTap { id: number; x: number; y: number }
-const BATTLE_DURATION = 210; // 3:30 total (15s warmup + 180s battle + 15s end)
+const BATTLE_DURATION = 320; // 2:00 prep + 3:00 battle + 20s farewell
+
+interface Profile {
+  id: string;
+  username: string;
+  avatar_url?: string;
+  wallet_credits?: number;
+  battle_credits?: number;
+}
+
+const fmtTime = (s: number) => {
+  if (s < 0) return "0:00";
+  return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+};
 
 // --- LiveKit Video Component ---
 import { useConnectionState, useRoomContext } from '@livekit/components-react';
@@ -40,9 +53,19 @@ function RoomWatcher({ playerA, playerB, onBothConnected }: { playerA?: string, 
   return null;
 }
 
-function BattleVideo({ expectedUsername, phase }: { expectedUsername?: string, phase: string }) {
+interface BattleVideoProps {
+  expectedUsername?: string;
+  phase: string;
+  playerA?: Profile | null;
+  playerB?: Profile | null;
+  displayTime: number;
+  isCountdown: boolean;
+}
+
+function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, isCountdown }: BattleVideoProps) {
   const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: false }]);
   const trackRef = tracks.find(t => t.participant.identity === expectedUsername);
+  const isCameraEnabled = phase !== "PREPARING";
 
   // Debug LiveKit connection state
   const connectionState = useConnectionState();
@@ -52,7 +75,7 @@ function BattleVideo({ expectedUsername, phase }: { expectedUsername?: string, p
 
   return (
     <div className="absolute inset-0 z-[0] overflow-hidden pointer-events-none">
-      {trackRef ? (
+      {trackRef && isCameraEnabled ? (
         <VideoTrack trackRef={trackRef as any} className="w-full h-full object-cover scale-[1.02]" />
       ) : (
         <div className="w-full h-full bg-[#0d0008] flex items-center justify-center">
@@ -60,34 +83,110 @@ function BattleVideo({ expectedUsername, phase }: { expectedUsername?: string, p
         </div>
       )}
       
-      {phase === "waiting" && (
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center z-[2]">
-          <span className="text-yellow-400 font-black tracking-widest text-[10px] mb-2 animate-pulse shadow-black drop-shadow-md text-center px-4">ESPERANDO CONEXIÓN...</span>
+      {phase === "PREPARING" && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-[4px] flex flex-col items-center justify-center z-[10]">
+          {/* Waiting for connection overlay inside PREPARING if not bothConnected */}
+          {!playerA?.username || !playerB?.username ? (
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative">
+                <div className="w-16 h-16 border-4 border-white/10 border-t-[#00d1ff] rounded-full animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Swords className="text-white/40" size={24} />
+                </div>
+              </div>
+              <span className="text-white/60 font-black tracking-[0.2em] text-[10px] uppercase animate-pulse">ESTABLECIENDO CONEXIÓN SEGURA...</span>
+            </div>
+          ) : (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center gap-6"
+            >
+              <div className="flex items-center gap-8 mb-4">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-20 h-20 rounded-full border-2 border-[#00d1ff] p-1">
+                    <div className="w-full h-full rounded-full bg-white/5 flex items-center justify-center overflow-hidden">
+                      {playerA?.avatar_url ? <img src={playerA.avatar_url} className="w-full h-full object-cover" /> : <div className="text-[#00d1ff] font-bold">A</div>}
+                    </div>
+                  </div>
+                  <span className="text-white font-black text-sm tracking-widest uppercase">@{playerA?.username}</span>
+                </div>
+                <div className="text-white/20 text-3xl font-black italic">VS</div>
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-20 h-20 rounded-full border-2 border-[#ff007a] p-1">
+                    <div className="w-full h-full rounded-full bg-white/5 flex items-center justify-center overflow-hidden">
+                      {playerB?.avatar_url ? <img src={playerB.avatar_url} className="w-full h-full object-cover" /> : <div className="text-[#ff007a] font-bold">B</div>}
+                    </div>
+                  </div>
+                  <span className="text-white font-black text-sm tracking-widest uppercase">@{playerB?.username}</span>
+                </div>
+              </div>
+              
+              <div className="text-center space-y-1">
+                <span className="text-[#00d1ff] font-black tracking-[0.3em] text-xs uppercase animate-pulse">Esperando público...</span>
+                <h2 className="text-4xl md:text-6xl font-black text-white italic tracking-tighter drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+                  PREPARANDO <span className="text-[#ff007a]">BATALLA</span>
+                </h2>
+              </div>
+
+              <div className="mt-4 flex flex-col items-center gap-2">
+                <div className="text-white/40 text-sm font-medium">Inicia en</div>
+                <div className="text-5xl font-black text-white font-mono">{fmtTime(displayTime)}</div>
+              </div>
+            </motion.div>
+          )}
         </div>
       )}
-      
-      {phase === "warmup" && (
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex flex-col items-center justify-center z-[2]">
-          <span className="text-white/90 font-black tracking-widest text-[10px] mb-2 animate-pulse shadow-black drop-shadow-md">PREPARANDO...</span>
-          <div className="w-8 h-8 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-        </div>
-      )}
+
+      {/* Giant Countdown (Last 10s of Prep) */}
+      <AnimatePresence>
+        {isCountdown && (
+          <motion.div 
+            key={displayTime}
+            initial={{ scale: 2, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.5, opacity: 0 }}
+            className="absolute inset-0 flex items-center justify-center z-[50] pointer-events-none"
+          >
+            <span className="text-[15rem] md:text-[25rem] font-black text-white italic drop-shadow-[0_0_30px_rgba(255,0,122,0.8)]">
+              {displayTime}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Battle Start Animation */}
+      <AnimatePresence>
+        {phase === "BATTLE" && displayTime >= 178 && (
+          <motion.div 
+            initial={{ scale: 0, rotate: -20, opacity: 0 }}
+            animate={{ scale: [0, 1.5, 1], rotate: 0, opacity: 1 }}
+            className="absolute inset-0 flex items-center justify-center z-[60] pointer-events-none"
+          >
+            <div className="bg-[#ff007a] px-12 py-4 skew-x-[-12deg] border-4 border-white shadow-[0_0_50px_#ff007a]">
+              <span className="text-7xl md:text-9xl font-black text-white italic tracking-tighter">¡BATALLA!</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 // --- LiveKit Local Controls (Mute & Flip Camera) ---
-function LocalControls({ isWarmup }: { isWarmup: boolean }) {
+function LocalControls({ phase }: { phase: string }) {
+  const isWarmup = phase === "PREPARING";
   const { localParticipant } = useLocalParticipant();
   const [isMuted, setIsMuted] = useState(false);
   const [facingMode, setFacingMode] = useState<"user"|"environment">("user");
 
   useEffect(() => {
     if (localParticipant) {
-      localParticipant.setCameraEnabled(true, { facingMode: "user" }).catch(e => console.error("Auto camera error:", e));
+      const shouldCamera = phase !== "PREPARING";
+      localParticipant.setCameraEnabled(shouldCamera, { facingMode: "user" }).catch(e => console.error("Auto camera error:", e));
       localParticipant.setMicrophoneEnabled(true).catch(e => console.error("Auto mic error:", e));
     }
-  }, [localParticipant]);
+  }, [localParticipant, phase]);
 
   if (isWarmup || !localParticipant) return null;
 
@@ -131,8 +230,8 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const [balance, setBalance] = useState(0);
   
   const [battleData, setBattleData] = useState<any>(null);
-  const [playerA, setPlayerA] = useState<any>(null);
-  const [playerB, setPlayerB] = useState<any>(null);
+  const [playerA, setPlayerA] = useState<Profile | null>(null);
+  const [playerB, setPlayerB] = useState<Profile | null>(null);
   const [mySide, setMySide] = useState<"A" | "B" | "Audience">("Audience");
   
   const [rematchA, setRematchA] = useState(false);
@@ -168,9 +267,16 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const pendingScoreB = useRef(0);
   const lastTapSound = useRef(0);
 
-  const phase = !bothConnected ? "waiting" : (timeLeft > 195 ? "warmup" : timeLeft > 15 ? "battle" : "finished");
-  const displayTime = phase === "waiting" ? 0 : (phase === "warmup" ? timeLeft - 195 : phase === "battle" ? timeLeft - 15 : 0);
-  const isUrgent = phase === "battle" && displayTime <= 30;
+  const phase = !bothConnected || timeLeft > 200 ? "PREPARING" : 
+                (timeLeft > 20 ? "BATTLE" : 
+                 timeLeft > 0 ? "ENDING" : "FINISHED");
+
+  const displayTime = phase === "PREPARING" ? Math.max(0, timeLeft - 200) : 
+                      (phase === "BATTLE" ? timeLeft - 20 : 
+                       phase === "ENDING" ? timeLeft : 0);
+
+  const isUrgent = phase === "BATTLE" && displayTime <= 30;
+  const isCountdown = phase === "PREPARING" && displayTime <= 10;
 
   const calculateTimeLeft = (startIso: string) => {
     const start = new Date(startIso).getTime();
@@ -296,7 +402,8 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
 
   // Finished Logic + Point Settlement
   useEffect(() => {
-    if (phase === "finished" && !isFinishedLocally) {
+    // Battle ended -> Enter Ending & Settle points
+    if (phase === "ENDING" && !isFinishedLocally) {
       setIsFinishedLocally(true);
       playSound("win");
       confetti({ 
@@ -320,11 +427,12 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
             }).eq("id", id);
 
             if (winnerId) {
-              const { data: winnerProfile } = await supabase.from("profiles").select("total_earned, wins").eq("id", winnerId).single();
+              const { data: winnerProfile } = await supabase.from("profiles").select("total_earned, wins, battle_credits").eq("id", winnerId).single();
               if (winnerProfile) {
                 await supabase.from("profiles").update({
                   total_earned: (winnerProfile.total_earned || 0) + totalPoints,
                   wins: (winnerProfile.wins || 0) + 1,
+                  battle_credits: (winnerProfile.battle_credits || 0) + totalPoints,
                 }).eq("id", winnerId);
               }
               // Battle win → goes to battle_credits (BCR)
@@ -332,11 +440,11 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
               const { data: opponentProf } = await supabase.from("profiles").select("username").eq("id", opponentId).single();
               await supabase.from("transactions").insert({
                 user_id: winnerId,
-                type: "battle_win",
+                type: "BATTLE_WIN",
                 amount_credits: totalPoints,
                 amount_bs: 0,
                 status: "approved",
-                reference_number: `Victoria vs @${opponentProf?.username || 'rival'}`,
+                reference_number: `BATALLA GANADA vs @${opponentProf?.username || 'rival'}`,
                 opponent_id: opponentId,
                 battle_id: id,
               });
@@ -364,7 +472,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       }
     }
 
-    if (timeLeft <= -15) {
+    if (timeLeft <= 0) {
       if (mySide === "A") {
         supabase.from("battles").update({ is_active: false }).eq("id", id).then(() => {
            router.push("/dashboard");
@@ -393,10 +501,6 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     if (atBottom) messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const fmtTime = (s: number) => {
-    if (s < 0) return "0:00";
-    return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
-  };
 
   const playSound = (type: "tap" | "gift" | "win") => {
     if (type === "tap") {
@@ -415,7 +519,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   };
 
   const handleTap = (side: "A" | "B", e: React.MouseEvent) => {
-    if (phase !== "battle") return; 
+    if (phase !== "BATTLE") return; 
     playSound("tap");
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -441,7 +545,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   };
 
   const sendGift = async (side: "A" | "B", giftKey: GiftKey) => {
-    if (!profile || !user || isSending || phase !== "battle") return;
+    if (!profile || !user || isSending || phase !== "BATTLE") return;
     const gift = GIFT_CATALOG.find(g => g.key === giftKey)!;
     try {
       // Gifts deduct from wallet_credits (WCR) only
@@ -449,8 +553,13 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       if (walletBal < gift.cost) { alert(`Saldo WCR insuficiente. Necesitas ${fmtWCR(gift.cost)} en tu billetera (depósitos).`); return; }
       setIsSending(true);
       playSound("gift");
-      const { error: txError } = await supabase.from("transactions").insert({ user_id: user.id, type: "gift", amount_credits: -gift.cost, amount_bs: 0, reference_number: `Envío Regalo: ${gift.label} a ${side}`, status: "approved" });
+      const { error: txError } = await supabase.from("transactions").insert({ user_id: user.id, type: "GIFT_SENT", amount_credits: -gift.cost, amount_bs: 0, reference_number: `Envío Regalo: ${gift.label} a ${side}`, status: "approved" });
       if (txError) throw txError;
+
+      // Update source of truth: profiles.wallet_credits
+      await supabase.from("profiles").update({
+        wallet_credits: Math.max(0, (profile.wallet_credits || 0) - gift.cost)
+      }).eq("id", user.id);
       const b = await getUserBalance(user.id);
       setBalance(b);
       if (gift.tier === 3) { fireSupremeConfetti(); triggerShake(8, 1000); flashGlow(side); setTakeover({ username: profile.username, label: gift.label, color: gift.color }); setTimeout(() => setTakeover(null), 3000); } 
@@ -513,31 +622,36 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         <Wallet size={13} className="text-[#00d1ff]" />
         <span className="text-xs font-bold text-[#00d1ff]">{fmtWCR(balance)}</span>
       </div>
-      {/* ── Progress Bar (No Text Overlap) ── */}
-      <div className="relative w-full h-8 overflow-hidden border-b border-white/10">
+      {/* ── Progress Bar (Barra de Pelea) ── */}
+      <div className="relative w-full h-3 overflow-hidden border-b border-white/10 z-20 bg-[#0d0008]">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-md" />
         <motion.div className="absolute inset-y-0 left-0 bg-[#ff007a]" animate={{ width: `${(rawA / total) * 100}%` }} />
         <motion.div className="absolute inset-y-0 right-0 bg-[#00d1ff]" animate={{ width: `${(rawB / total) * 100}%` }} />
       </div>
 
-      {/* ── Info Bar: Scores, Usernames, Timer ── */}
-      <div className="w-full flex items-center justify-between px-6 py-2 bg-[#0d0008] border-b border-white/10 relative z-20">
+      {/* ── Info Bar: Scores, Usernames, Timer (Debajo de barra de pelea, compacto) ── */}
+      <div className="w-full flex items-start justify-between px-6 pt-2 pb-1 bg-[#0d0008] relative z-20 shadow-[0_10px_20px_rgba(0,0,0,0.5)] border-b border-white/5">
+        {/* Lado Izquierdo: Puntaje arriba, Usuario abajo */}
         <div className="flex flex-col items-start min-w-[80px]">
-          <span className="font-black text-xl text-[#ff007a] leading-none mb-1">{displayA.toLocaleString()}</span>
-          <span className="text-white/80 text-[11px] font-bold tracking-wider">@{playerA?.username || 'Cargando...'}</span>
+          <span className="font-black text-2xl text-[#ff007a] leading-none drop-shadow-[0_0_8px_rgba(255,0,122,0.6)]">{displayA.toLocaleString()}</span>
+          <span className="text-white/80 text-[10px] font-bold tracking-wider mt-1">@{playerA?.username || 'Cargando...'}</span>
         </div>
         
+        {/* Cronómetro Centrado */}
         <div className="flex items-center justify-center flex-1">
-          <div className="bg-black/80 backdrop-blur-md border border-white/10 px-6 py-1.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
-            <span className={`font-[family-name:var(--font-orbitron)] font-black text-xl tracking-[0.15em] ${isUrgent ? "text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]" : "text-white"}`}>
-              {phase === "waiting" ? "ESPERANDO..." : phase === "warmup" ? `PREPARANDO... ${fmtTime(displayTime)}` : fmtTime(displayTime)}
+          <div className="bg-black/90 backdrop-blur-md border border-white/10 px-6 py-1.5 rounded-full shadow-[0_0_15px_rgba(0,0,0,0.8)]">
+            <span className={`font-[family-name:var(--font-orbitron)] font-black text-lg tracking-widest ${isUrgent ? "text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" : "text-white"}`}>
+              {phase === "PREPARING" ? (bothConnected ? `INICIA: ${fmtTime(displayTime)}` : "ESPERANDO...") : 
+               phase === "ENDING" ? `FIN: ${fmtTime(displayTime)}` :
+               fmtTime(displayTime)}
             </span>
           </div>
         </div>
 
+        {/* Lado Derecho: Puntaje arriba, Usuario abajo */}
         <div className="flex flex-col items-end min-w-[80px]">
-          <span className="font-black text-xl text-[#00d1ff] leading-none mb-1">{displayB.toLocaleString()}</span>
-          <span className="text-white/80 text-[11px] font-bold tracking-wider">@{playerB?.username || 'Cargando...'}</span>
+          <span className="font-black text-2xl text-[#00d1ff] leading-none drop-shadow-[0_0_8px_rgba(0,209,255,0.6)]">{displayB.toLocaleString()}</span>
+          <span className="text-white/80 text-[10px] font-bold tracking-wider mt-1">@{playerB?.username || 'Cargando...'}</span>
         </div>
       </div>
 
@@ -559,15 +673,45 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         <RoomWatcher playerA={playerA?.username} playerB={playerB?.username} onBothConnected={setBothConnected} />
         
         <div className="grid grid-cols-2 flex-1 relative min-h-0" style={{ gap: 0 }}>
-          {mySide !== "Audience" && <LocalControls isWarmup={phase === "warmup" || phase === "waiting"} />}
+          {mySide !== "Audience" && <LocalControls phase={phase} />}
 
-          <div className={`relative overflow-hidden select-none w-full h-full ${phase === "battle" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("A", e)}>
+          <AnimatePresence>
+            {phase === "ENDING" && (
+              <motion.div 
+                initial={{ y: -100, opacity: 0 }}
+                animate={{ y: 20, opacity: 1 }}
+                className="absolute top-20 left-4 right-4 z-[50] flex justify-center pointer-events-none"
+              >
+                <div className="cyber-glass rounded-2xl px-6 py-4 border-2 border-[#ffd700] shadow-[0_0_30px_rgba(255,215,0,0.4)] flex items-center gap-4">
+                  <Trophy className="text-[#ffd700]" size={32} />
+                  <div>
+                    <p className="text-white/60 text-[10px] uppercase font-black tracking-widest">GANADOR DE LA BATALLA</p>
+                    <h3 className="text-xl font-black text-white">
+                      {rawA > rawB ? playerA?.username : rawB > rawA ? playerB?.username : "¡EMPATE!"}
+                    </h3>
+                    {rawA !== rawB && (
+                      <p className="text-[#ffd700] font-bold text-sm">+{fmtBCR(rawA + rawB)} BCR Ganados</p>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className={`relative overflow-hidden select-none w-full h-full ${phase === "BATTLE" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("A", e)}>
             <div className="absolute inset-0 bg-[#0d0008]" />
             <div className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full absolute inset-0">
-              <BattleVideo expectedUsername={playerA?.username} phase={phase} />
+              <BattleVideo 
+                expectedUsername={playerA?.username} 
+                phase={phase} 
+                playerA={playerA}
+                playerB={playerB}
+                displayTime={displayTime}
+                isCountdown={isCountdown}
+              />
             </div>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[1]">
-              {(!playerA?.username || phase === "warmup" || phase === "waiting") && (
+              {(!playerA?.username || phase === "PREPARING") && (
                 <>
                   {playerA && <img src={playerA.avatar_url || "https://i.pravatar.cc/150"} className="w-12 h-12 rounded-full mb-2 opacity-50" />}
                   <span className="text-[#ff007a]/8 font-black text-7xl">A</span>
@@ -582,13 +726,20 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
             </AnimatePresence>
           </div>
 
-          <div className={`relative overflow-hidden select-none w-full h-full ${phase === "battle" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("B", e)}>
+          <div className={`relative overflow-hidden select-none w-full h-full ${phase === "BATTLE" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("B", e)}>
             <div className="absolute inset-0 bg-[#000810]" />
             <div className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full absolute inset-0">
-              <BattleVideo expectedUsername={playerB?.username} phase={phase} />
+              <BattleVideo 
+                expectedUsername={playerB?.username} 
+                phase={phase} 
+                playerA={playerA}
+                playerB={playerB}
+                displayTime={displayTime}
+                isCountdown={isCountdown}
+              />
             </div>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[1]">
-              {(!playerB?.username || phase === "warmup" || phase === "waiting") && (
+              {(!playerB?.username || phase === "PREPARING") && (
                 <>
                   {playerB && <img src={playerB.avatar_url || "https://i.pravatar.cc/150"} className="w-12 h-12 rounded-full mb-2 opacity-50" />}
                   <span className="text-[#00d1ff]/8 font-black text-7xl">B</span>
@@ -621,7 +772,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         </div>
         <div className="flex gap-2 items-center">
           <input id="battle-chat-msg" name="battle-chat-msg" type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === "Enter" && sendMsg()} placeholder="Type a message..." className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-2 text-white text-xs placeholder-white/20 focus:outline-none focus:border-[#00d1ff]/40" autoComplete="off" />
-          <button onClick={async () => { setShowGiftSheet(true); if(user) setBalance(await getUserBalance(user.id)); }} disabled={phase !== "battle"} className="p-2 text-white/30 hover:text-[#ffd700] disabled:opacity-20 transition-colors"><Gift size={20} /></button>
+          <button onClick={async () => { setShowGiftSheet(true); if(user) setBalance(await getUserBalance(user.id)); }} disabled={phase !== "BATTLE"} className="p-2 text-white/30 hover:text-[#ffd700] disabled:opacity-20 transition-colors"><Gift size={20} /></button>
           <button onClick={sendMsg} disabled={!newMessage.trim()} className="bg-[#00d1ff] disabled:opacity-30 text-black p-2 rounded-xl font-bold"><Send size={18} /></button>
         </div>
       </div>
@@ -651,15 +802,15 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <button disabled={!selectedGiftKey || isSending || phase !== "battle"} onClick={() => { if(selectedGiftKey) { sendGift("A", selectedGiftKey); setShowGiftSheet(false); }}} className="py-4 bg-[#ff007a] disabled:opacity-20 text-white rounded-2xl font-black uppercase tracking-widest text-xs">Enviar a A</button>
-                <button disabled={!selectedGiftKey || isSending || phase !== "battle"} onClick={() => { if(selectedGiftKey) { sendGift("B", selectedGiftKey); setShowGiftSheet(false); }}} className="py-4 bg-[#00d1ff] disabled:opacity-20 text-white rounded-2xl font-black uppercase tracking-widest text-xs">Enviar a B</button>
+                <button disabled={!selectedGiftKey || isSending || phase !== "BATTLE"} onClick={() => { if(selectedGiftKey) { sendGift("A", selectedGiftKey); setShowGiftSheet(false); }}} className="py-4 bg-[#ff007a] disabled:opacity-20 text-white rounded-2xl font-black uppercase tracking-widest text-xs">Enviar a A</button>
+                <button disabled={!selectedGiftKey || isSending || phase !== "BATTLE"} onClick={() => { if(selectedGiftKey) { sendGift("B", selectedGiftKey); setShowGiftSheet(false); }}} className="py-4 bg-[#00d1ff] disabled:opacity-20 text-white rounded-2xl font-black uppercase tracking-widest text-xs">Enviar a B</button>
               </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {phase === "finished" && (
+        {phase === "FINISHED" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[200] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" />
             <motion.div 

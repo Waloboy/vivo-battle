@@ -20,41 +20,19 @@ export interface DualBalance {
 export async function getDualBalance(userId: string): Promise<DualBalance> {
   const supabase = createClient();
 
-  const { data: txns, error } = await supabase
-    .from("transactions")
-    .select("type, amount_credits, status")
-    .eq("user_id", userId)
-    .eq("status", "approved");
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("wallet_credits, battle_credits")
+    .eq("id", userId)
+    .single();
 
-  if (error || !txns) {
-    console.error("Error calculating dual balance:", error);
+  if (error || !profile) {
+    console.error("Error fetching dual balance from profile:", error);
     return { wallet_credits: 0, battle_credits: 0, total: 0 };
   }
 
-  let wallet_credits = 0;
-  let battle_credits = 0;
-
-  for (const txn of txns) {
-    const amount = txn.amount_credits || 0;
-    switch (txn.type) {
-      case "deposit":
-      case "manual_adjustment":
-        wallet_credits += amount;
-        break;
-      case "gift":
-        // gift transactions have negative amount_credits for the sender
-        wallet_credits += amount;
-        break;
-      case "withdrawal":
-        // withdrawal amount is positive — subtract from battle_credits first
-        battle_credits -= amount;
-        break;
-      case "battle_win":
-      case "bonus":
-        battle_credits += amount;
-        break;
-    }
-  }
+  const wallet_credits = profile.wallet_credits || 0;
+  const battle_credits = profile.battle_credits || 0;
 
   return {
     wallet_credits: Math.max(0, wallet_credits),

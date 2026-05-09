@@ -81,7 +81,9 @@ export default function AdminDashboard() {
     const { data: gifts } = await supabase
       .from("transactions")
       .select("user_id, amount_credits, profiles(username, bank_name, id_card, phone_number)")
-      .eq("type", "gift").eq("status", "approved").gte("created_at", weekAgo);
+      .in("type", ["gift", "GIFT_SENT"])
+      .eq("status", "approved")
+      .gte("created_at", weekAgo);
 
     if (!gifts) { setSettLoading(false); return; }
 
@@ -117,7 +119,9 @@ export default function AdminDashboard() {
     const { data: wins } = await supabase
       .from("transactions")
       .select("user_id, amount_credits, opponent_id, battle_id, created_at, reference_number, profiles(username, bank_name, id_card, phone_number)")
-      .eq("type", "battle_win").eq("status", "approved").gte("created_at", weekAgo);
+      .in("type", ["battle_win", "BATTLE_WIN"])
+      .eq("status", "approved")
+      .gte("created_at", weekAgo);
 
     if (!wins) { setBcrLoading(false); return; }
     setBcrBattles(wins);
@@ -158,20 +162,73 @@ export default function AdminDashboard() {
 
   const handleApprove = async (txn: any) => {
     setProcessingId(txn.id);
-    const { error } = await supabase.from("transactions").update({ status: "approved", resolved_at: new Date().toISOString() }).eq("id", txn.id);
-    if (!error && txn.type === "deposit") {
-      const { data: wallet } = await supabase.from("wallets").select("balance").eq("user_id", txn.user_id).single();
-      if (wallet) await supabase.from("wallets").update({ balance: wallet.balance + txn.amount_credits, updated_at: new Date().toISOString() }).eq("user_id", txn.user_id);
+    
+    // 1. Approve the transaction
+    const { error: txErr } = await supabase.from("transactions").update({ 
+      status: "approved", 
+      resolved_at: new Date().toISOString() 
+    }).eq("id", txn.id);
+
+    if (txErr) {
+      console.error("Error approving transaction:", txErr);
+      setProcessingId(null);
+      return;
     }
+
+    // 2. Update the user profile balance if it's a deposit
+    if (txn.type === "deposit" || txn.type === "DEPOSIT_PENDING") {
+      const { data: prof } = await supabase.from("profiles").select("wallet_credits").eq("id", txn.user_id).single();
+      if (prof) {
+        await supabase.from("profiles").update({
+          wallet_credits: (prof.wallet_credits || 0) + (txn.amount_credits || 0)
+        }).eq("id", txn.user_id);
+      }
+    }
+
     setProcessingId(null);
     await fetchTransactions();
   };
 
   const handleReject = async (txn: any) => {
     setProcessingId(txn.id);
-    await supabase.from("transactions").update({ status: "rejected", resolved_at: new Date().toISOString() }).eq("id", txn.id);
+    
+    // 1. Reject the transaction
+    const { error: txErr } = await supabase.from("transactions").update({ 
+      status: "rejected", 
+      resolved_at: new Date().toISOString() 
+    }).eq("id", txn.id);
+
+    if (txErr) {
+      console.error("Error rejecting transaction:", txErr);
+      setProcessingId(null);
+      return;
+    }
+
+    // 2. If it was a withdrawal, return the credits to the user
+    if (txn.type === "withdrawal") {
+      const { data: prof } = await supabase.from("profiles").select("battle_credits").eq("id", txn.user_id).single();
+      if (prof) {
+        await supabase.from("profiles").update({
+          battle_credits: (prof.battle_credits || 0) + (txn.amount_credits || 0)
+        }).eq("id", txn.user_id);
+      }
+    }
+
     setProcessingId(null);
     await fetchTransactions();
+  };
+
+  const handleUpdateBcv = async () => {
+    if (bcvRate === null) return;
+    setProcessingId("bcv_rate");
+    const { error } = await supabase
+      .from("app_config")
+      .update({ value: bcvRate.toString() })
+      .eq("key", "bcv_rate");
+    
+    setProcessingId(null);
+    if (error) alert("Error actualizando tasa: " + error.message);
+    else alert("Tasa BCV actualizada correctamente.");
   };
 
   // ── Guards ──
@@ -185,8 +242,8 @@ export default function AdminDashboard() {
   );
 
   const pending = transactions.filter((t: any) => t.status === "pending");
-  const totalGiftsCr = transactions.filter((t: any) => t.type === "gift").reduce((s: any, t: any) => s + (t.amount_credits || 0), 0);
-  const totalBattleCr = transactions.filter((t: any) => t.type === "battle_win").reduce((s: any, t: any) => s + (t.amount_credits || 0), 0);
+  const totalGiftsCr = transactions.filter((t: any) => t.type === "gift" || t.type === "GIFT_SENT").reduce((s: any, t: any) => s + (t.amount_credits || 0), 0);
+  const totalBattleCr = transactions.filter((t: any) => t.type === "battle_win" || t.type === "BATTLE_WIN").reduce((s: any, t: any) => s + (t.amount_credits || 0), 0);
 
   return (
     <div className="flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto space-y-5">
@@ -210,10 +267,24 @@ export default function AdminDashboard() {
             <span className="block text-white/30 text-[10px] uppercase">BCR</span>
             <span className="text-base font-bold text-[#00d1ff]">{totalBattleCr.toLocaleString("es-VE")}</span>
           </div>
-          {bcvRate && (
-            <div className="cyber-glass px-3 py-2 rounded-xl border-white/5 text-center min-w-[90px]">
-              <span className="block text-white/30 text-[10px] uppercase">BCV</span>
-              <span className="text-base font-bold text-[#ffd700]">{fmtBs(bcvRate)}</span>
+          {bcvRate !== null && (
+            <div className="cyber-glass px-3 py-2 rounded-xl border border-[#ffd700]/30 flex items-center gap-3">
+              <div className="text-center min-w-[70px]">
+                <span className="block text-white/30 text-[10px] uppercase">Tasa BCV</span>
+                <input 
+                  type="number" 
+                  value={bcvRate} 
+                  onChange={(e) => setBcvRate(parseFloat(e.target.value))}
+                  className="bg-transparent text-base font-bold text-[#ffd700] w-16 text-center focus:outline-none"
+                />
+              </div>
+              <button 
+                onClick={handleUpdateBcv}
+                disabled={processingId === "bcv_rate"}
+                className="p-1.5 bg-[#ffd700]/10 text-[#ffd700] rounded-lg hover:bg-[#ffd700]/20 transition-all border border-[#ffd700]/20 disabled:opacity-50"
+              >
+                {processingId === "bcv_rate" ? <Loader2 size={14} className="animate-spin"/> : <CheckCircle2 size={14}/>}
+              </button>
             </div>
           )}
           <button onClick={() => { fetchTransactions(); if (tab === "settlement") fetchSettlement(); }}
@@ -255,8 +326,8 @@ export default function AdminDashboard() {
                 <div key={txn.id} className="cyber-glass rounded-2xl p-4 border border-white/5 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "deposit" ? "text-[#00d1ff]" : txn.type === "gift" ? "text-[#e056fd]" : "text-white/50"}`}>
-                        {txn.type === "deposit" ? "Recarga" : txn.type === "gift" ? "Gift" : "Retiro"}
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "text-[#00d1ff]" : txn.type === "gift" || txn.type === "GIFT_SENT" ? "text-[#e056fd]" : txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" : "text-white/50"}`}>
+                        {txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "Recarga" : txn.type === "gift" || txn.type === "GIFT_SENT" ? "Gift" : txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "Batalla" : "Retiro"}
                       </span>
                       <p className="font-semibold text-sm mt-0.5">@{prof?.username || "—"}</p>
                     </div>
@@ -282,8 +353,8 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-white/25">{new Date(txn.created_at).toLocaleDateString("es-VE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
-                    {txn.type === "gift" ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[#e056fd]/10 text-[#e056fd] border border-[#e056fd]/20 text-[10px] font-bold"><Sparkles size={9}/> Auto</span>
+                    {txn.type === "gift" || txn.type === "GIFT_SENT" || txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? (
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-bold ${txn.type.includes("BATTLE") ? "bg-[#ffd700]/10 text-[#ffd700] border-[#ffd700]/20" : "bg-[#e056fd]/10 text-[#e056fd] border-[#e056fd]/20"}`}><Sparkles size={9}/> Auto</span>
                     ) : txn.status === "pending" ? (
                       <div className="flex gap-2">
                         {isProc ? <Loader2 className="animate-spin" size={18}/> : (<>
@@ -318,8 +389,8 @@ export default function AdminDashboard() {
                     return (
                       <tr key={txn.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                         <td className="px-4 py-3">
-                          <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "deposit" ? "text-[#00d1ff]" : txn.type === "gift" ? "text-[#e056fd]" : "text-white/50"}`}>
-                            {txn.type === "deposit" ? "Recarga" : txn.type === "gift" ? "Gift" : "Retiro"}
+                          <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "text-[#00d1ff]" : (txn.type === "gift" || txn.type === "GIFT_SENT" ? "text-[#e056fd]" : (txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" : "text-white/50"))}`}>
+                            {txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "Depósito" : (txn.type === "gift" || txn.type === "GIFT_SENT" ? "Gift" : (txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "Batalla" : "Retiro"))}
                           </span>
                         </td>
                         <td className="px-4 py-3 font-medium text-[#00d1ff]">@{prof?.username || "—"}</td>
@@ -333,8 +404,8 @@ export default function AdminDashboard() {
                         <td className="px-4 py-3"><StatusBadge status={txn.status}/></td>
                         <td className="px-4 py-3 text-xs text-white/30">{new Date(txn.created_at).toLocaleDateString("es-VE", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}</td>
                         <td className="px-4 py-3 text-right">
-                          {txn.type === "gift" ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[#e056fd]/10 text-[#e056fd] border border-[#e056fd]/20 text-[10px] font-bold"><Sparkles size={9}/> Auto</span>
+                          {txn.type === "gift" || txn.type === "GIFT_SENT" || txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? (
+                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-bold ${txn.type.includes("BATTLE") ? "bg-[#ffd700]/10 text-[#ffd700] border-[#ffd700]/20" : "bg-[#e056fd]/10 text-[#e056fd] border-[#e056fd]/20"}`}><Sparkles size={9}/> Auto</span>
                           ) : txn.status === "pending" ? (
                             <div className="flex items-center justify-end gap-1.5">
                               {isProc ? <Loader2 className="animate-spin" size={18}/> : (<>

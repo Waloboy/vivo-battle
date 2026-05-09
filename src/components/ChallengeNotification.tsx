@@ -68,11 +68,11 @@ export function ChallengeNotification() {
             // Only show if the broadcast challenge is meant for us
             if (p.challenged_id === userIdRef.current) {
               // Fetch username for UI
-              const { data: prof } = await supabase
+              const { data: prof } = (await supabase
                 .from("profiles")
                 .select("username")
                 .eq("id", p.challenger_id)
-                .single();
+                .single()) as { data: { username: string } | null };
 
               setChallenge({
                 id: p.id,
