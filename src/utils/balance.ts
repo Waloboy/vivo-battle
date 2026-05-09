@@ -1,16 +1,25 @@
 import { createClient } from "./supabase/client";
 
 /**
- * Calcula el balance consolidado del usuario basándose estrictamente
- * en el historial de transacciones aprobadas.
- * 
- * Lógica: SUM(Ingresos) - SUM(Egresos)
- * Ingresos: deposit, gift, bonus, manual_adjustment
- * Egresos: withdrawal
+ * Dual Credit System for VIVO Battle
+ *
+ * WCR (Wallet Credits) — from deposits. Used to buy gifts.
+ *   Income:  deposit, manual_adjustment
+ *   Expense: gift (negative amount_credits), withdrawal
+ *
+ * BCR (Battle Credits) — from battle wins. Withdrawable earnings.
+ *   Income:  battle_win, bonus
  */
-export async function getUserBalance(userId: string): Promise<number> {
+
+export interface DualBalance {
+  wallet_credits: number;   // WCR
+  battle_credits: number;   // BCR
+  total: number;
+}
+
+export async function getDualBalance(userId: string): Promise<DualBalance> {
   const supabase = createClient();
-  
+
   const { data: txns, error } = await supabase
     .from("transactions")
     .select("type, amount_credits, status")
@@ -18,23 +27,56 @@ export async function getUserBalance(userId: string): Promise<number> {
     .eq("status", "approved");
 
   if (error || !txns) {
-    console.error("Error calculating balance:", error);
-    return 0;
+    console.error("Error calculating dual balance:", error);
+    return { wallet_credits: 0, battle_credits: 0, total: 0 };
   }
 
-  const incomeTypes = ["deposit", "gift", "bonus", "manual_adjustment"];
-  const expenseTypes = ["withdrawal"];
+  let wallet_credits = 0;
+  let battle_credits = 0;
 
-  const balance = txns.reduce((acc: any, txn: any) => {
+  for (const txn of txns) {
     const amount = txn.amount_credits || 0;
-    if (incomeTypes.includes(txn.type)) {
-      return acc + amount;
+    switch (txn.type) {
+      case "deposit":
+      case "manual_adjustment":
+        wallet_credits += amount;
+        break;
+      case "gift":
+        // gift transactions have negative amount_credits for the sender
+        wallet_credits += amount;
+        break;
+      case "withdrawal":
+        // withdrawal amount is positive — subtract from battle_credits first
+        battle_credits -= amount;
+        break;
+      case "battle_win":
+      case "bonus":
+        battle_credits += amount;
+        break;
     }
-    if (expenseTypes.includes(txn.type)) {
-      return acc - amount;
-    }
-    return acc;
-  }, 0);
+  }
 
-  return balance;
+  return {
+    wallet_credits: Math.max(0, wallet_credits),
+    battle_credits: Math.max(0, battle_credits),
+    total: Math.max(0, wallet_credits) + Math.max(0, battle_credits),
+  };
+}
+
+/** Backward-compat: returns total balance (WCR + BCR) */
+export async function getUserBalance(userId: string): Promise<number> {
+  const dual = await getDualBalance(userId);
+  return dual.total;
+}
+
+/** Returns only wallet credits (for gift purchases) */
+export async function getWalletCredits(userId: string): Promise<number> {
+  const dual = await getDualBalance(userId);
+  return dual.wallet_credits;
+}
+
+/** Returns only battle credits (for withdrawals) */
+export async function getBattleCredits(userId: string): Promise<number> {
+  const dual = await getDualBalance(userId);
+  return dual.battle_credits;
 }

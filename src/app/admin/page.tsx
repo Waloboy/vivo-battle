@@ -3,12 +3,12 @@
 import { useState, useEffect } from "react";
 import {
   CheckCircle2, XCircle, Clock, Loader2, RefreshCw,
-  ShieldAlert, Sparkles, Scissors, Copy, CheckCheck, ChevronDown, ChevronUp
+  ShieldAlert, Sparkles, Scissors, Copy, CheckCheck, ChevronDown, ChevronUp, Swords, Trophy
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { fmtCR, fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
 
-type Tab = "transactions" | "settlement";
+type Tab = "transactions" | "settlement" | "battle_settlement";
 
 interface SettlementRow {
   user_id: string;
@@ -46,6 +46,11 @@ export default function AdminDashboard() {
   const [exchangeRate, setExchangeRate] = useState(80);
   const [settLoading, setSettLoading] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // BCR Settlement
+  const [bcrSettlement, setBcrSettlement] = useState<SettlementRow[]>([]);
+  const [bcrLoading, setBcrLoading] = useState(false);
+  const [bcrBattles, setBcrBattles] = useState<any[]>([]);
   const [bcvRate, setBcvRate] = useState<number | null>(null);
 
   useEffect(() => { checkAdminAndFetch(); }, []);
@@ -106,6 +111,40 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => { if (tab === "settlement") fetchSettlement(); }, [tab, exchangeRate]);
+  useEffect(() => { if (tab === "battle_settlement") fetchBcrSettlement(); }, [tab, exchangeRate]);
+
+  const fetchBcrSettlement = async () => {
+    setBcrLoading(true);
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: wins } = await supabase
+      .from("transactions")
+      .select("user_id, amount_credits, opponent_id, battle_id, created_at, reference_number, profiles(username, bank_name, id_card, phone_number)")
+      .eq("type", "battle_win").eq("status", "approved").gte("created_at", weekAgo);
+
+    if (!wins) { setBcrLoading(false); return; }
+    setBcrBattles(wins);
+
+    const map = new Map<string, SettlementRow>();
+    for (const w of wins) {
+      const p = w.profiles as any;
+      if (!map.has(w.user_id)) {
+        map.set(w.user_id, {
+          user_id: w.user_id, username: p?.username || "—",
+          bank_name: p?.bank_name || null, id_card: p?.id_card || null, phone_number: p?.phone_number || null,
+          total_cr: 0, user_share_cr: 0, app_share_cr: 0, user_payout_bs: 0,
+          paid: false, expanded: false,
+        });
+      }
+      map.get(w.user_id)!.total_cr += w.amount_credits;
+    }
+    for (const row of map.values()) {
+      row.user_share_cr = row.total_cr; // 100% of battle wins go to user
+      row.app_share_cr = 0;
+      row.user_payout_bs = (row.user_share_cr / 100) * exchangeRate;
+    }
+    setBcrSettlement(Array.from(map.values()).sort((a, b) => b.total_cr - a.total_cr));
+    setBcrLoading(false);
+  };
 
   const toggleExpanded = (userId: string) =>
     setSettlement(prev => prev.map(r => r.user_id === userId ? { ...r, expanded: !r.expanded } : r));
@@ -149,6 +188,7 @@ export default function AdminDashboard() {
 
   const pending = transactions.filter((t: any) => t.status === "pending");
   const totalGiftsCr = transactions.filter((t: any) => t.type === "gift").reduce((s: any, t: any) => s + (t.amount_credits || 0), 0);
+  const totalBattleCr = transactions.filter((t: any) => t.type === "battle_win").reduce((s: any, t: any) => s + (t.amount_credits || 0), 0);
 
   return (
     <div className="flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto space-y-5">
@@ -167,6 +207,10 @@ export default function AdminDashboard() {
           <div className="cyber-glass px-3 py-2 rounded-xl border-white/5 text-center min-w-[70px]">
             <span className="block text-white/30 text-[10px] uppercase">Gifts (CR)</span>
             <span className="text-base font-bold text-[#e056fd]">{totalGiftsCr.toLocaleString("es-VE")}</span>
+          </div>
+          <div className="cyber-glass px-3 py-2 rounded-xl border-white/5 text-center min-w-[70px]">
+            <span className="block text-white/30 text-[10px] uppercase">BCR</span>
+            <span className="text-base font-bold text-[#00d1ff]">{totalBattleCr.toLocaleString("es-VE")}</span>
           </div>
           {bcvRate && (
             <div className="cyber-glass px-3 py-2 rounded-xl border-white/5 text-center min-w-[90px]">
@@ -189,7 +233,11 @@ export default function AdminDashboard() {
         </button>
         <button onClick={() => setTab("settlement")}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${tab === "settlement" ? "bg-[#ffd700]/10 text-[#ffd700] border border-[#ffd700]/20" : "text-white/35 hover:text-white/60"}`}>
-          <Scissors size={13}/> Corte Semanal
+          <Scissors size={13}/> Corte Gifts
+        </button>
+        <button onClick={() => setTab("battle_settlement")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${tab === "battle_settlement" ? "bg-[#00d1ff]/10 text-[#00d1ff] border border-[#00d1ff]/20" : "text-white/35 hover:text-white/60"}`}>
+          <Trophy size={13}/> Liquidación BCR
         </button>
       </div>
 
@@ -463,6 +511,113 @@ export default function AdminDashboard() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════
+          TAB: BCR SETTLEMENT (Battle Credits)
+      ══════════════════════════════════════ */}
+      {tab === "battle_settlement" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-white/40 text-xs flex items-center gap-1.5"><Swords size={12}/> Ganancias de batallas — últimos 7 días</p>
+          </div>
+
+          {bcrLoading ? (
+            <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#00d1ff]" size={30}/></div>
+          ) : bcrSettlement.length === 0 ? (
+            <div className="py-10 text-center text-white/30 text-sm">No hay ganancias de batalla en los últimos 7 días.</div>
+          ) : (
+            <div className="space-y-3">
+              {bcrSettlement.map(row => {
+                const userBattles = bcrBattles.filter(b => b.user_id === row.user_id);
+                return (
+                <div key={row.user_id} className={`cyber-glass rounded-2xl border overflow-hidden transition-all ${row.paid ? "border-emerald-500/20 opacity-60" : "border-white/5"}`}>
+                  <button onClick={() => setBcrSettlement(prev => prev.map(r => r.user_id === row.user_id ? { ...r, expanded: !r.expanded } : r))}
+                    className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white/[0.02] transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#00d1ff] to-[#ff007a] flex items-center justify-center"><Trophy size={14} className="text-white"/></div>
+                      <div className="text-left">
+                        <p className="font-semibold text-[#00d1ff] text-sm">@{row.username}</p>
+                        <p className="text-[10px] text-white/30 mt-0.5">{userBattles.length} victoria{userBattles.length !== 1 ? 's' : ''} · {fmtCR(row.total_cr)} BCR</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-base font-black text-[#ffd700]">{fmtBs(row.user_payout_bs)}</p>
+                        <p className="text-[10px] text-white/30">{fmtUSD(crToUsd(row.total_cr))}</p>
+                      </div>
+                      {row.paid
+                        ? <span className="text-[10px] text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">✓ Pagado</span>
+                        : row.expanded ? <ChevronUp size={16} className="text-white/40"/> : <ChevronDown size={16} className="text-white/40"/>
+                      }
+                    </div>
+                  </button>
+
+                  {row.expanded && !row.paid && (
+                    <div className="border-t border-white/5 px-4 py-4 space-y-4">
+                      {/* Battle history list */}
+                      <div>
+                        <p className="text-[10px] text-white/30 uppercase tracking-wider mb-2">Historial de Batallas</p>
+                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                          {userBattles.map((b: any, i: number) => (
+                            <div key={i} className="flex items-center justify-between bg-black/30 rounded-xl px-3 py-2 border border-white/5">
+                              <div className="flex items-center gap-2">
+                                <Swords size={12} className="text-[#ff007a]"/>
+                                <span className="text-xs text-white/70">{b.reference_number || '—'}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs font-bold text-emerald-400">+{fmtCR(b.amount_credits)}</span>
+                                <span className="text-[10px] text-white/25">{new Date(b.created_at).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' })} {new Date(b.created_at).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Banking info */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {[
+                          { label: "Banco", value: row.bank_name, id: `bcr-bank-${row.user_id}` },
+                          { label: "Cédula", value: row.id_card, id: `bcr-id-${row.user_id}` },
+                          { label: "Teléfono", value: row.phone_number, id: `bcr-phone-${row.user_id}` },
+                        ].map(field => (
+                          <div key={field.label} className="bg-black/30 rounded-xl p-3 border border-white/5">
+                            <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">{field.label}</p>
+                            {field.value ? (
+                              <button onClick={() => copyToClipboard(field.value!, field.id)}
+                                className="flex items-center gap-1.5 text-sm text-white/80 hover:text-white transition-colors group font-mono">
+                                {field.value}
+                                {copiedField === field.id ? <CheckCheck size={12} className="text-emerald-400"/> : <Copy size={12} className="opacity-0 group-hover:opacity-40 transition-opacity"/>}
+                              </button>
+                            ) : <span className="text-white/20 text-sm">—</span>}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Payout summary */}
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        <div className="bg-[#00d1ff]/5 border border-[#00d1ff]/15 rounded-lg px-3 py-2">
+                          <p className="text-white/30 text-[10px] mb-0.5">Total BCR</p>
+                          <p className="font-bold text-[#00d1ff]">{fmtCR(row.total_cr)}</p>
+                          <p className="text-[10px] text-white/30 mt-0.5">{fmtUSD(crToUsd(row.total_cr))}</p>
+                        </div>
+                        <div className="bg-[#ffd700]/5 border border-[#ffd700]/15 rounded-lg px-3 py-2">
+                          <p className="text-white/30 text-[10px] mb-0.5">Pago Bs</p>
+                          <p className="font-bold text-[#ffd700]">{fmtBs(row.user_payout_bs)}</p>
+                        </div>
+                      </div>
+
+                      <button onClick={() => setBcrSettlement(prev => prev.map(r => r.user_id === row.user_id ? { ...r, paid: !r.paid } : r))}
+                        className="w-full py-2.5 rounded-xl font-bold text-sm bg-[#00d1ff]/10 text-[#00d1ff] border border-[#00d1ff]/20 hover:bg-[#00d1ff]/20 transition-all">
+                        Marcar como Pagado ✓
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )})}
             </div>
           )}
         </div>

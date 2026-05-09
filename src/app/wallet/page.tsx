@@ -5,7 +5,7 @@ import { Wallet, Plus, ArrowUpRight, History, Loader2, CheckCircle2, Sparkles, T
 import { Modal } from "@/components/ui/Modal";
 import { createClient } from "@/utils/supabase/client";
 import { fmtCR, fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
-import { getUserBalance } from "../../utils/balance";
+import { getUserBalance, getDualBalance, type DualBalance } from "../../utils/balance";
 
 // ── Utility: dynamic font size for large numbers ──
 function balanceFontSize(n: number): string {
@@ -25,6 +25,7 @@ export default function Dashboard() {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [bcvRate, setBcvRate] = useState<number | null>(null);
+  const [dualBal, setDualBal] = useState<DualBalance>({ wallet_credits: 0, battle_credits: 0, total: 0 });
 
   // Recharge State
   const [amountBs, setAmountBs] = useState("");
@@ -51,6 +52,9 @@ export default function Dashboard() {
 
     if (profileRes.data) setProfile(profileRes.data);
     setBalance(calculatedBalance);
+    // Also fetch dual balance
+    const dual = await getDualBalance(user.id);
+    setDualBal(dual);
     if (txRes.data) setTransactions(txRes.data);
     if (rateRes.data?.value) setBcvRate(parseFloat(rateRes.data.value));
 
@@ -83,7 +87,7 @@ export default function Dashboard() {
   const handleWithdrawSubmit = async () => {
     if (!withdrawAmount) return;
     const amountCredits = parseInt(withdrawAmount);
-    if (amountCredits > balance) { alert("No tienes suficientes créditos."); return; }
+    if (amountCredits > dualBal.battle_credits) { alert(`Solo puedes retirar de tus ganancias de batalla (BCR). Tienes ${fmtCR(dualBal.battle_credits)} BCR disponibles.`); return; }
     if (!profile?.phone_number) { alert("Configura tus datos bancarios en el Perfil."); return; }
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) { alert("Sesión expirada."); return; }
@@ -137,6 +141,18 @@ export default function Dashboard() {
                   <span className="text-sm font-bold text-[#ffd700]">{fmtBs(balanceBs)}</span>
                 </div>
               )}
+            </div>
+
+            {/* ── WCR / BCR split ── */}
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <div className="bg-[#ff007a]/5 rounded-xl p-3 border border-[#ff007a]/10">
+                <p className="text-[10px] text-white/30 uppercase tracking-wider mb-0.5">WCR (Billetera)</p>
+                <p className="text-base font-black text-[#ff007a]">{fmtCR(dualBal.wallet_credits)}</p>
+              </div>
+              <div className="bg-[#00d1ff]/5 rounded-xl p-3 border border-[#00d1ff]/10">
+                <p className="text-[10px] text-white/30 uppercase tracking-wider mb-0.5">BCR (Batallas)</p>
+                <p className="text-base font-black text-[#00d1ff]">{fmtCR(dualBal.battle_credits)}</p>
+              </div>
             </div>
 
             {/* ── BCV rate note ── */}

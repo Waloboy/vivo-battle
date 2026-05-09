@@ -430,16 +430,22 @@ export default function ExploreDashboard() {
             {searchOpen && searchResults.length > 0 && (
               <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="absolute top-full left-0 right-0 mt-1.5 bg-[#0d0d0d] border border-white/10 rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.8)] z-30">
                 {searchResults.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between px-4 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.03] transition-colors">
+                  <div key={r.id} className="px-4 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.03] transition-colors space-y-2.5">
+                    {/* Username row — prominent */}
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#ff007a] to-[#00d1ff] p-[1px]"><div className="w-full h-full rounded-full bg-[#0a0a0a] flex items-center justify-center"><span className="text-[10px] font-black text-white/50">{r.username[0].toUpperCase()}</span></div></div>
-                      <span className="text-sm font-semibold text-white">@{r.username}</span>
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#ff007a] to-[#00d1ff] p-[1.5px] flex-shrink-0">
+                        <div className="w-full h-full rounded-full bg-[#0a0a0a] flex items-center justify-center">
+                          <span className="text-xs font-black text-white/60">{r.username[0].toUpperCase()}</span>
+                        </div>
+                      </div>
+                      <span className="text-sm font-bold text-white">@{r.username}</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => toggleFollow(r.id)} disabled={followingInProgress.has(r.id)} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${followedUsers.has(r.id) ? "bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white" : "bg-[#00d1ff]/15 text-[#00d1ff] border border-[#00d1ff]/20 hover:bg-[#00d1ff]/25"}`}>
+                    {/* Action buttons — aligned horizontal, equal width */}
+                    <div className="flex gap-2 pl-[46px]">
+                      <button onClick={() => toggleFollow(r.id)} disabled={followingInProgress.has(r.id)} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${followedUsers.has(r.id) ? "bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white" : "bg-[#00d1ff]/15 text-[#00d1ff] border border-[#00d1ff]/20 hover:bg-[#00d1ff]/25"}`}>
                         {followingInProgress.has(r.id) ? <Loader2 size={12} className="animate-spin" /> : followedUsers.has(r.id) ? <><Check size={12} /> Siguiendo</> : <><UserPlus size={12} /> Seguir</>}
                       </button>
-                      <button onClick={() => sendChallenge(r.id)} disabled={challengeSending === r.id || challengeSent.has(r.id)} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all ${challengeSent.has(r.id) ? "bg-white/5 text-white/30" : "bg-[#ff007a]/15 text-[#ff007a] border border-[#ff007a]/20 hover:bg-[#ff007a]/25"}`}>
+                      <button onClick={() => sendChallenge(r.id)} disabled={challengeSending === r.id || challengeSent.has(r.id)} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${challengeSent.has(r.id) ? "bg-white/5 text-white/30 border border-white/5" : "bg-[#ff007a]/15 text-[#ff007a] border border-[#ff007a]/20 hover:bg-[#ff007a]/25"}`}>
                         {challengeSending === r.id ? <Loader2 size={12} className="animate-spin" /> : challengeSent.has(r.id) ? <><Check size={12} /> Enviado</> : <><Swords size={12} /> Retar</>}
                       </button>
                     </div>

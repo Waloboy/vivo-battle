@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Swords, X } from "lucide-react";
+import { Swords, X, Wifi, WifiOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
@@ -18,16 +18,19 @@ export function ChallengeNotification() {
   const [challenge, setChallenge] = useState<IncomingChallenge | null>(null);
   const [responding, setResponding] = useState(false);
   const [hidden, setHidden] = useState(false);
+  const [channelStatus, setChannelStatus] = useState<string>("connecting");
+  const userIdRef = useRef<string | null>(null);
+  const channelRef = useRef<any>(null);
 
   useEffect(() => {
-    // ... existing logic ...
-    let userId: string | null = null;
+    let mounted = true;
 
-    (async () => {
+    const setupRealtime = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      userId = user.id;
+      if (!user || !mounted) return;
+      userIdRef.current = user.id;
 
+      // Check for pending challenges on load
       const { data: pending } = await supabase
         .from("challenges")
         .select("id, challenger_id, profiles!challenges_challenger_id_fkey(username)")
@@ -36,7 +39,7 @@ export function ChallengeNotification() {
         .order("created_at", { ascending: false })
         .limit(1);
 
-      if (pending && pending.length > 0) {
+      if (mounted && pending && pending.length > 0) {
         const c = pending[0];
         setChallenge({
           id: c.id,
@@ -45,76 +48,103 @@ export function ChallengeNotification() {
         });
         setHidden(false);
       }
-    })();
 
-    const channel = supabase
-      .channel("challenge-notifications")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "challenges" },
-        async (payload: any) => {
-          if (!userId) return;
-          if (payload.new.challenged_id === userId && payload.new.status === "pending") {
-            const { data: prof } = await supabase
-              .from("profiles")
-              .select("username")
-              .eq("id", payload.new.challenger_id)
-              .single();
+      // Remove any existing channel before creating new one
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
 
-            setChallenge({
-              id: payload.new.id,
-              challenger_id: payload.new.challenger_id,
-              challenger_username: prof?.username || "???",
-            });
-            setHidden(false);
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "challenges" },
-        (payload: any) => {
-          if (!userId) return;
-          if (payload.new.challenger_id === userId && payload.new.status === "accepted" && payload.new.battle_id) {
-            setHidden(true);
-            router.push(`/battle/${payload.new.battle_id}`);
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "battles" },
-        (payload: any) => {
-          if (!userId) return;
-          if (payload.new.player_a_id === userId || payload.new.player_b_id === userId) {
-            setHidden(true);
-            router.push(`/battle/${payload.new.id}`);
-          }
-        }
-      )
-      .subscribe();
+      const channel = supabase
+        .channel("global-challenge-listener", {
+          config: { broadcast: { self: false } },
+        })
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "challenges",
+            filter: `challenged_id=eq.${user.id}`,
+          },
+          async (payload: any) => {
+            if (!mounted || !userIdRef.current) return;
+            if (payload.new.status === "pending") {
+              const { data: prof } = await supabase
+                .from("profiles")
+                .select("username")
+                .eq("id", payload.new.challenger_id)
+                .single();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [supabase]);
+              setChallenge({
+                id: payload.new.id,
+                challenger_id: payload.new.challenger_id,
+                challenger_username: prof?.username || "???",
+              });
+              setHidden(false);
+            }
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "challenges",
+            filter: `challenger_id=eq.${user.id}`,
+          },
+          (payload: any) => {
+            if (!mounted || !userIdRef.current) return;
+            if (payload.new.status === "accepted" && payload.new.battle_id) {
+              setHidden(true);
+              router.push(`/battle/${payload.new.battle_id}`);
+            }
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "battles" },
+          (payload: any) => {
+            if (!mounted || !userIdRef.current) return;
+            if (
+              payload.new.player_a_id === userIdRef.current ||
+              payload.new.player_b_id === userIdRef.current
+            ) {
+              setHidden(true);
+              router.push(`/battle/${payload.new.id}`);
+            }
+          }
+        )
+        .subscribe((status: string, err?: Error) => {
+          if (!mounted) return;
+          setChannelStatus(status === "SUBSCRIBED" ? "connected" : status);
+          if (err) console.error("[ChallengeNotification] Channel error:", err);
+        });
+
+      channelRef.current = channel;
+    };
+
+    setupRealtime();
+
+    return () => {
+      mounted = false;
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [supabase, router]);
 
   const handleAccept = async () => {
     if (!challenge || responding) return;
     setResponding(true);
-    setHidden(true); // Cierra la notificación inmediatamente en la UI local
+    setHidden(true);
 
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setHidden(false);
-      return;
-    }
+    if (!user) { setHidden(false); setResponding(false); return; }
 
     const { data: battle, error: battleError } = await supabase
       .from("battles")
-      .insert({
-        player_a_id: challenge.challenger_id,
-        player_b_id: user.id,
-        is_active: true,
-      })
+      .insert({ player_a_id: challenge.challenger_id, player_b_id: user.id, is_active: true })
       .select("id")
       .single();
 
@@ -125,24 +155,19 @@ export function ChallengeNotification() {
       return;
     }
 
-    const { error: updateError } = await supabase
+    await supabase
       .from("challenges")
-      .update({ 
-        status: "accepted", 
-        battle_id: battle.id, 
+      .update({
+        status: "accepted",
+        battle_id: battle.id,
         resolved_at: new Date().toISOString(),
         challenger_id: challenge.challenger_id,
-        challenged_id: user.id
+        challenged_id: user.id,
       })
       .eq("id", challenge.id);
-      
-    if (updateError) {
-      console.error("Error updating challenge:", updateError);
-    }
 
     setChallenge(null);
     setResponding(false);
-
     router.push(`/battle/${battle.id}`);
   };
 
@@ -190,10 +215,7 @@ export function ChallengeNotification() {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={handleDecline}
-                  className="p-1.5 rounded-full hover:bg-white/10 transition-colors text-white/30"
-                >
+                <button onClick={handleDecline} className="p-1.5 rounded-full hover:bg-white/10 transition-colors text-white/30">
                   <X size={16} />
                 </button>
               </div>
@@ -202,18 +224,12 @@ export function ChallengeNotification() {
 
               {/* Actions */}
               <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={handleDecline}
-                  disabled={responding}
-                  className="py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all disabled:opacity-30"
-                >
+                <button onClick={handleDecline} disabled={responding}
+                  className="py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all disabled:opacity-30">
                   NO
                 </button>
-                <button
-                  onClick={handleAccept}
-                  disabled={responding}
-                  className="py-3 bg-gradient-to-r from-[#ff007a] to-[#00d1ff] text-white rounded-2xl font-black text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,122,0.3)] hover:shadow-[0_0_30px_rgba(255,0,122,0.5)] transition-all disabled:opacity-30"
-                >
+                <button onClick={handleAccept} disabled={responding}
+                  className="py-3 bg-gradient-to-r from-[#ff007a] to-[#00d1ff] text-white rounded-2xl font-black text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,122,0.3)] hover:shadow-[0_0_30px_rgba(255,0,122,0.5)] transition-all disabled:opacity-30">
                   {responding ? "..." : "SÍ, ACEPTO"}
                 </button>
               </div>

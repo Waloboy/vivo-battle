@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { GIFT_CATALOG, type GiftKey } from "../gifts";
 import { useAnimatedCount } from "../useAnimatedCount";
-import { getUserBalance } from "@/utils/balance";
+import { getUserBalance, getWalletCredits } from "@/utils/balance";
 import { fmtCR } from "@/utils/format";
 
 import { LiveKitRoom, VideoTrack, useTracks, useLocalParticipant, useParticipants } from '@livekit/components-react';
@@ -327,14 +327,18 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                   wins: (winnerProfile.wins || 0) + 1,
                 }).eq("id", winnerId);
               }
-              // Insert transaction so the winner gets the credits in their balance
+              // Battle win → goes to battle_credits (BCR)
+              const opponentId = winnerId === battleData?.player_a_id ? battleData?.player_b_id : battleData?.player_a_id;
+              const { data: opponentProf } = await supabase.from("profiles").select("username").eq("id", opponentId).single();
               await supabase.from("transactions").insert({
                 user_id: winnerId,
-                type: "bonus",
+                type: "battle_win",
                 amount_credits: totalPoints,
                 amount_bs: 0,
                 status: "approved",
-                reference_number: `Victoria en Batalla: ${id}`
+                reference_number: `Victoria vs @${opponentProf?.username || 'rival'}`,
+                opponent_id: opponentId,
+                battle_id: id,
               });
             }
             if (loserId) {
@@ -440,8 +444,9 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     if (!profile || !user || isSending || phase !== "battle") return;
     const gift = GIFT_CATALOG.find(g => g.key === giftKey)!;
     try {
-      const currentBal = await getUserBalance(user.id);
-      if (currentBal < gift.cost) { alert(`Saldo insuficiente. Necesitas ${fmtCR(gift.cost)}`); return; }
+      // Gifts deduct from wallet_credits (WCR) only
+      const walletBal = await getWalletCredits(user.id);
+      if (walletBal < gift.cost) { alert(`Saldo WCR insuficiente. Necesitas ${fmtCR(gift.cost)} en tu billetera (depósitos).`); return; }
       setIsSending(true);
       playSound("gift");
       const { error: txError } = await supabase.from("transactions").insert({ user_id: user.id, type: "gift", amount_credits: -gift.cost, amount_bs: 0, reference_number: `Envío Regalo: ${gift.label} a ${side}`, status: "approved" });
@@ -534,11 +539,11 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         connectOptions={{ autoSubscribe: true }}
         video={true}
         audio={true}
-        className="flex flex-col flex-[2] min-h-0"
+        className="flex flex-col flex-[5] min-h-0"
       >
         <RoomWatcher playerA={playerA?.username} playerB={playerB?.username} onBothConnected={setBothConnected} />
         
-        <div className="grid grid-cols-2 gap-0 flex-1 relative min-h-0">
+        <div className="grid grid-cols-2 flex-1 relative min-h-0" style={{ gap: 0 }}>
           {mySide !== "Audience" && <LocalControls isWarmup={phase === "warmup" || phase === "waiting"} />}
 
           <div className={`relative overflow-hidden select-none w-full h-full ${phase === "battle" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("A", e)}>
@@ -587,7 +592,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         </div>
       </LiveKitRoom>
 
-      <div className="flex-1 min-h-[100px] bg-black/40 backdrop-blur-xl p-2 flex flex-col border-t border-white/5 relative">
+      <div className="min-h-[80px] max-h-[140px] bg-black/40 backdrop-blur-xl p-2 flex flex-col border-t border-white/5 relative">
         <div className="flex-1 overflow-y-auto space-y-1.5 mb-2 pr-1 flex flex-col">
           {messages.map((msg: any) => {
             const isElite = msg.text?.includes("Dominion") || msg.text?.includes("Satellite") || msg.text?.includes("Hypernova") || msg.text?.includes("VIVO Supreme");

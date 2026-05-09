@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { User, MapPin, Building2, Loader2, Save, CheckCircle2, Phone, FileText, Edit2, ArrowLeft, CreditCard, History, Sparkles, TrendingUp, Users, UserCheck, UserPlus, Camera, Trophy, X } from "lucide-react";
+import { User, MapPin, Building2, Loader2, Save, CheckCircle2, Phone, FileText, Edit2, ArrowLeft, CreditCard, History, Sparkles, TrendingUp, Users, UserCheck, UserPlus, Camera, Trophy, X, Swords } from "lucide-react";
 import { motion } from "framer-motion";
 import { createClient } from "@/utils/supabase/client";
 import { fmtCR, fmtUSD, fmtBs } from "@/utils/format";
-import { getUserBalance } from "../../utils/balance";
+import { getUserBalance, getDualBalance, type DualBalance } from "../../utils/balance";
 import Link from "next/link";
 
 export default function ProfilePage() {
@@ -22,6 +22,8 @@ export default function ProfilePage() {
   const [daysUntilChange, setDaysUntilChange] = useState<number | null>(null);
   const [bcvRate, setBcvRate] = useState<number>(0);
   const [balance, setBalance] = useState<number>(0);
+  const [dualBal, setDualBal] = useState<DualBalance>({ wallet_credits: 0, battle_credits: 0, total: 0 });
+  const [battleHistory, setBattleHistory] = useState<any[]>([]);
   const [rankPosition, setRankPosition] = useState<number | string>("—");
 
   // Social counters
@@ -63,8 +65,20 @@ export default function ProfilePage() {
       if (config) setBcvRate(parseFloat(config.value));
 
       // Fetch dynamic balance using unified helper
-      const calculatedBalance = await getUserBalance(user.id);
-      setBalance(calculatedBalance);
+      const dual = await getDualBalance(user.id);
+      setDualBal(dual);
+      setBalance(dual.total);
+
+      // Fetch battle history (last 20 battles)
+      const { data: battles } = await supabase
+        .from("transactions")
+        .select("amount_credits, created_at, reference_number, opponent_id")
+        .eq("user_id", user.id)
+        .in("type", ["battle_win", "bonus"])
+        .eq("status", "approved")
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (battles) setBattleHistory(battles);
 
       // Fetch social counts
       const [followersRes, followingRes, battlesRes] = await Promise.all([
@@ -287,16 +301,29 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Quick Balance Card */}
+          {/* Quick Balance Card — Dual */}
           <div className="cyber-glass rounded-3xl p-6 border-white/5 space-y-4 relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <CreditCard size={80} />
             </div>
             
             <div>
-              <p className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Balance Disponible</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-black text-white">{fmtCR(balance)}</span>
+              <p className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Balance Total</p>
+              <div className="flex items-baseline gap-2 mb-4">
+                <span className="text-3xl font-black text-white">{fmtCR(balance)}</span>
+              </div>
+              {/* WCR / BCR split */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-[#ff007a]/5 rounded-xl p-3 border border-[#ff007a]/10">
+                  <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">WCR (Billetera)</p>
+                  <p className="text-lg font-black text-[#ff007a]">{fmtCR(dualBal.wallet_credits)}</p>
+                  <p className="text-[10px] text-white/25 mt-0.5">Depósitos · Gifts</p>
+                </div>
+                <div className="bg-[#00d1ff]/5 rounded-xl p-3 border border-[#00d1ff]/10">
+                  <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">BCR (Batallas)</p>
+                  <p className="text-lg font-black text-[#00d1ff]">{fmtCR(dualBal.battle_credits)}</p>
+                  <p className="text-[10px] text-white/25 mt-0.5">Ganancias · Retirable</p>
+                </div>
               </div>
             </div>
 
@@ -312,6 +339,35 @@ export default function ProfilePage() {
               )}
             </div>
           </div>
+
+          {/* ── Historial de Batallas ── */}
+          {battleHistory.length > 0 && (
+            <div className="cyber-glass rounded-3xl p-5 border-white/5 space-y-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Swords size={16} className="text-[#ff007a]" />
+                <p className="text-xs font-bold text-white/50 uppercase tracking-widest">Historial de Batallas</p>
+              </div>
+              <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
+                {battleHistory.map((b, i) => (
+                  <div key={i} className="flex items-center justify-between bg-black/20 rounded-xl px-3 py-2.5 border border-white/5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                        <Trophy size={12} className="text-emerald-400" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-white/80">{b.reference_number || 'Victoria'}</p>
+                        <p className="text-[10px] text-white/25">
+                          {new Date(b.created_at).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })}{' '}
+                          {new Date(b.created_at).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-sm font-black text-emerald-400">+{fmtCR(b.amount_credits)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Main Actions */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
