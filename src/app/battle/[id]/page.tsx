@@ -541,8 +541,21 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const triggerShake = (intensity: number, dur: number) => { setShaking(true); setTimeout(() => setShaking(false), dur); };
   const flashGlow = (side: "A" | "B") => { if (side === "A") { setGlowA(true); setTimeout(() => setGlowA(false), 1200); } else { setGlowB(true); setTimeout(() => setGlowB(false), 1200); } };
   const fireSupremeConfetti = () => {
-    const colors = ["#ff007a", "#00d1ff", "#ffd700"];
-    for (let i = 0; i < 3; i++) setTimeout(() => confetti({ particleCount: 150, spread: 100 + i * 20, origin: { y: 0.45 - i * 0.1 }, colors, gravity: 0.8, scalar: 1.2 }), i * 250);
+    const colors = ["#ff007a", "#00d1ff", "#ffd700", "#ffffff"];
+    // High-end tech style: small particles, high speed, subtle trail
+    for (let i = 0; i < 4; i++) {
+      setTimeout(() => confetti({ 
+        particleCount: 80, 
+        spread: 70 + i * 20, 
+        origin: { y: 0.5 }, 
+        colors, 
+        gravity: 0.6, 
+        scalar: 0.7, 
+        ticks: 200,
+        shapes: ['square'],
+        drift: 0,
+      }), i * 150);
+    }
   };
 
   const sendGift = async (side: "A" | "B", giftKey: GiftKey) => {
@@ -760,7 +773,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       <div className="min-h-[80px] max-h-[140px] bg-black/40 backdrop-blur-xl p-2 flex flex-col border-t border-white/5 relative">
         <div className="flex-1 overflow-y-auto space-y-1.5 mb-2 pr-1 flex flex-col">
           {messages.map((msg: any) => {
-            const isElite = msg.text?.includes("Dominion") || msg.text?.includes("Satellite") || msg.text?.includes("Hypernova") || msg.text?.includes("VIVO Supreme");
+            const isElite = msg.tier === 3;
             return (
               <div key={msg.id} className={`text-[11px] py-1.5 px-3 rounded-xl w-max max-w-[92%] flex gap-2 items-start border ${isElite ? 'animate-pulse' : ''}`} 
                 style={isElite ? { background: `${msg.color}40`, borderColor: msg.color, boxShadow: `0 0 10px ${msg.color}80, inset 0 0 5px ${msg.color}40` } : msg.isGift ? { background: `${msg.color}10`, borderColor: `${msg.color}20` } : { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.03)" }}>

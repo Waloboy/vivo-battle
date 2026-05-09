@@ -93,7 +93,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
     if (!withdrawAmount) return;
     const amountCredits = parseInt(withdrawAmount);
     if (amountCredits > dualBal.battle_credits) { 
-      alert(`Solo puedes retirar de tu Saldo de Batalla (BCR). Tienes ${fmtWCR(dualBal.battle_credits)} BCR disponibles.`); 
+      alert(`Solo puedes retirar de tu Saldo de Batalla (BCR). Tienes ${fmtBCR(dualBal.battle_credits)} disponibles.`); 
       return; 
     }
     if (!profile?.phone_number) { alert("Configura tus datos bancarios en el Perfil."); return; }
@@ -254,8 +254,8 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
                 txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" :
                 "text-[#00d1ff]"
               }`}>
-                {txn.type === "withdrawal" || txn.type === "GIFT_SENT" || txn.type === "gift" ? "-" : "+"}{Math.abs(txn.amount_credits).toLocaleString("es-VE")}
-                <span className="text-[10px] font-normal opacity-40 ml-0.5">CR</span>
+                {txn.type === "withdrawal" || txn.type === "GIFT_SENT" || txn.type === "gift" ? "-" : "+"}
+                {txn.type.includes("BATTLE") || txn.type === "battle_win" ? fmtBCR(Math.abs(txn.amount_credits)) : fmtWCR(Math.abs(txn.amount_credits))}
               </div>
             </div>
           ))}
@@ -350,7 +350,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
               <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Créditos a Retirar (BCR)</label>
               <input id="wallet-withdraw-amount" name="wallet-withdraw-amount" type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Ej. 5000"
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors" />
-              <p className="text-[11px] text-white/30 mt-1">Saldo BCR disponible: {fmtWCR(dualBal.battle_credits)}</p>
+              <p className="text-[11px] text-white/30 mt-1">Saldo BCR disponible: {fmtBCR(dualBal.battle_credits)}</p>
               
               {withdrawAmount && !isNaN(parseInt(withdrawAmount)) && (
                 <div className="mt-3 space-y-2 p-3 bg-white/5 rounded-xl border border-white/10">

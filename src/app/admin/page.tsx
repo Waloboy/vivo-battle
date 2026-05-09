@@ -6,8 +6,12 @@ import {
   ShieldAlert, Sparkles, Scissors, Copy, CheckCheck, ChevronDown, ChevronUp, Swords, Trophy
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { fmtWCR, fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
+import { fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
 import { useAuth } from "@/components/AuthProvider";
+
+// ── Local Formatters ──
+const fmtWCR = (value: number) => Math.floor(value).toLocaleString("es-VE") + " WCR";
+const fmtBCR = (value: number) => Math.floor(value).toLocaleString("es-VE") + " BCR";
 
 type Tab = "transactions" | "settlement" | "battle_settlement";
 
@@ -335,7 +339,9 @@ export default function AdminDashboard() {
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <p className="text-white/30 font-light">Créditos</p>
-                      <p className="font-bold text-[#ff007a]">{fmtWCR(txn.amount_credits ?? 0)}</p>
+                      <p className="font-bold text-[#ff007a]">
+                        {txn.type.includes("BATTLE") ? fmtBCR(txn.amount_credits ?? 0) : fmtWCR(txn.amount_credits ?? 0)}
+                      </p>
                     </div>
                     <div>
                       <p className="text-white/30 font-light">Monto BS</p>
@@ -399,7 +405,9 @@ export default function AdminDashboard() {
                         </td>
                         <td className="px-4 py-3 font-mono text-xs">{txn.reference_number || "—"}</td>
                         <td className="px-4 py-3 font-semibold">{fmtBs(parseFloat(txn.amount_bs || 0))}</td>
-                        <td className="px-4 py-3 font-bold text-[#ff007a]">{fmtWCR(txn.amount_credits ?? 0)}</td>
+                        <td className="px-4 py-3 font-bold text-[#ff007a]">
+                          {txn.type.includes("BATTLE") ? fmtBCR(txn.amount_credits ?? 0) : fmtWCR(txn.amount_credits ?? 0)}
+                        </td>
                         <td className="px-4 py-3"><StatusBadge status={txn.status}/></td>
                         <td className="px-4 py-3 text-xs text-white/30">{new Date(txn.created_at).toLocaleDateString("es-VE", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}</td>
                         <td className="px-4 py-3 text-right">
@@ -609,7 +617,7 @@ export default function AdminDashboard() {
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#00d1ff] to-[#ff007a] flex items-center justify-center"><Trophy size={14} className="text-white"/></div>
                       <div className="text-left">
                         <p className="font-semibold text-[#00d1ff] text-sm">@{row.username}</p>
-                        <p className="text-[10px] text-white/30 mt-0.5">{userBattles.length} victoria{userBattles.length !== 1 ? 's' : ''} · {fmtWCR(row.total_cr)} total · 60% → {fmtWCR(row.user_share_cr)}</p>
+                        <p className="text-[10px] text-white/30 mt-0.5">{userBattles.length} victoria{userBattles.length !== 1 ? 's' : ''} · {fmtBCR(row.total_cr)} total · 60% → {fmtBCR(row.user_share_cr)}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -637,7 +645,7 @@ export default function AdminDashboard() {
                                 <span className="text-xs text-white/70">{b.reference_number || '—'}</span>
                               </div>
                               <div className="flex items-center gap-3">
-                                <span className="text-xs font-bold text-emerald-400">+{fmtWCR(b.amount_credits)}</span>
+                                <span className="text-xs font-bold text-emerald-400">+{fmtBCR(b.amount_credits)}</span>
                                 <span className="text-[10px] text-white/25">{new Date(b.created_at).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' })} {new Date(b.created_at).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</span>
                               </div>
                             </div>
@@ -669,17 +677,17 @@ export default function AdminDashboard() {
                       <div className="flex flex-wrap gap-2 text-xs">
                         <div className="bg-[#00d1ff]/5 border border-[#00d1ff]/15 rounded-lg px-3 py-2">
                           <p className="text-white/30 text-[10px] mb-0.5">Total BCR</p>
-                          <p className="font-bold text-[#00d1ff]">{fmtWCR(row.total_cr)}</p>
+                          <p className="font-bold text-[#00d1ff]">{fmtBCR(row.total_cr)}</p>
                           <p className="text-[10px] text-white/30 mt-0.5">{fmtUSD(crToUsd(row.total_cr))}{bcvRate ? ` · ${fmtBs(crToBs(row.total_cr, bcvRate))}` : ""}</p>
                         </div>
                         <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-3 py-2">
                           <p className="text-white/30 text-[10px] mb-0.5">60% usuario</p>
-                          <p className="font-bold text-emerald-400">{fmtWCR(row.user_share_cr)}</p>
+                          <p className="font-bold text-emerald-400">{fmtBCR(row.user_share_cr)}</p>
                           <p className="text-[10px] text-white/30 mt-0.5">{fmtBs(row.user_payout_bs)} · {fmtUSD(crToUsd(row.user_share_cr))}</p>
                         </div>
                         <div className="bg-[#ffd700]/5 border border-[#ffd700]/15 rounded-lg px-3 py-2">
                           <p className="text-white/30 text-[10px] mb-0.5">40% app</p>
-                          <p className="font-bold text-[#ffd700]">{fmtWCR(row.app_share_cr)}</p>
+                          <p className="font-bold text-[#ffd700]">{fmtBCR(row.app_share_cr)}</p>
                           <p className="text-[10px] text-white/30 mt-0.5">{fmtUSD(crToUsd(row.app_share_cr))}{bcvRate ? ` · ${fmtBs(crToBs(row.app_share_cr, bcvRate))}` : ""}</p>
                         </div>
                       </div>
