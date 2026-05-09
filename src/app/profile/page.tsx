@@ -44,8 +44,8 @@ export default function ProfilePage() {
         setProfile(data);
         setOriginalUsername(data.username);
         
-        // Calculate rank
-        const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).gt('wins', data.wins || 0);
+        // Calculate rank based on accumulated points
+        const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).gt('points', data.points || 0);
         setRankPosition((count || 0) + 1);
 
         if (data.last_username_change) {

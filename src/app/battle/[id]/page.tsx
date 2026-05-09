@@ -161,6 +161,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const [livekitToken, setLivekitToken] = useState("");
   const [bothConnected, setBothConnected] = useState(false);
   const [hasBroadcastedStart, setHasBroadcastedStart] = useState(false);
+  const [hasSettledPoints, setHasSettledPoints] = useState(false);
 
   // Batching logic for performance
   const pendingScoreA = useRef(0);
@@ -226,11 +227,16 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
          setRematchA(false);
          setRematchB(false);
          setIsFinishedLocally(false);
+         setHasSettledPoints(false);
          setTimeLeft(calculateTimeLeft(payload.started_at));
       })
       .on("broadcast", { event: "battle_start" }, ({ payload }: { payload: any }) => {
          setBattleData((prev: any) => ({ ...prev, started_at: payload.started_at }));
          setTimeLeft(calculateTimeLeft(payload.started_at));
+      })
+      // Synchronized exit: opponent left or rejected rematch
+      .on("broadcast", { event: "battle_exit" }, () => {
+         router.push("/dashboard");
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "battles", filter: `id=eq.${id}` }, (payload: any) => {
          if (payload.new.started_at) {
@@ -241,7 +247,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       .subscribe();
       
     return () => { supabase.removeChannel(ch); };
-  }, [id, supabase]);
+  }, [id, supabase, router]);
 
   // Generate LiveKit Token
   useEffect(() => {
@@ -288,7 +294,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     }
   }, [bothConnected, mySide, hasBroadcastedStart, id]);
 
-  // Finished Logic
+  // Finished Logic + Point Settlement
   useEffect(() => {
     if (phase === "finished" && !isFinishedLocally) {
       setIsFinishedLocally(true);
@@ -297,9 +303,57 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         particleCount: 250, spread: 100, origin: { y: 0.6 },
         colors: ["#ff007a", "#00d1ff"], gravity: 0.8, scalar: 1.2
       });
+
+      // Point Settlement: Player A is the authority that writes results
+      if (mySide === "A" && !hasSettledPoints) {
+        setHasSettledPoints(true);
+        (async () => {
+          try {
+            const winnerId = rawA > rawB ? battleData?.player_a_id : rawB > rawA ? battleData?.player_b_id : null;
+            const loserId = rawA > rawB ? battleData?.player_b_id : rawB > rawA ? battleData?.player_a_id : null;
+            const totalPoints = rawA + rawB;
+
+            // Save final scores to battle record
+            await supabase.from("battles").update({
+              score_a: rawA, score_b: rawB,
+            }).eq("id", id);
+
+            if (winnerId) {
+              // Add points to winner's profile
+              const { data: winnerProfile } = await supabase.from("profiles").select("points, wins").eq("id", winnerId).single();
+              if (winnerProfile) {
+                await supabase.from("profiles").update({
+                  points: (winnerProfile.points || 0) + totalPoints,
+                  wins: (winnerProfile.wins || 0) + 1,
+                }).eq("id", winnerId);
+              }
+            }
+            if (loserId) {
+              // Increment losses for loser
+              const { data: loserProfile } = await supabase.from("profiles").select("losses").eq("id", loserId).single();
+              if (loserProfile) {
+                await supabase.from("profiles").update({
+                  losses: (loserProfile.losses || 0) + 1,
+                }).eq("id", loserId);
+              }
+            }
+            if (!winnerId && !loserId) {
+              // Draw — increment draws for both
+              for (const pid of [battleData?.player_a_id, battleData?.player_b_id]) {
+                if (!pid) continue;
+                const { data: p } = await supabase.from("profiles").select("draws").eq("id", pid).single();
+                if (p) await supabase.from("profiles").update({ draws: (p.draws || 0) + 1 }).eq("id", pid);
+              }
+            }
+            console.log(`[Battle] Points settled: winner=${winnerId}, total=${totalPoints}`);
+          } catch (err) {
+            console.error("[Battle] Point settlement error:", err);
+          }
+        })();
+      }
     }
 
-    if (timeLeft <= -15) { // 30s after the battle ends (15s modal + 15s wait)
+    if (timeLeft <= -15) {
       if (mySide === "A") {
         supabase.from("battles").update({ is_active: false }).eq("id", id).then(() => {
            router.push("/dashboard");
@@ -308,7 +362,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         router.push("/dashboard");
       }
     }
-  }, [phase, timeLeft, isFinishedLocally, mySide, id, router, supabase]);
+  }, [phase, timeLeft, isFinishedLocally, hasSettledPoints, mySide, id, router, supabase, rawA, rawB, battleData]);
 
   // Rematch Acceptance Logic
   useEffect(() => {
@@ -416,6 +470,8 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   };
 
   const handleExitBattle = async () => {
+    // Broadcast exit to the opponent so they don't get stuck
+    await supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "battle_exit", payload: { side: mySide } });
     if (mySide === "A") {
        await supabase.from("battles").update({ is_active: false }).eq("id", id);
     }
@@ -430,7 +486,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const winData = getWinner();
 
   return (
-    <motion.div animate={shaking ? { x: [0, -8, 8, -6, 6, -3, 3, 0], y: [0, 4, -4, 3, -3, 1, -1, 0] } : {}} transition={{ duration: 1 }} className="flex-1 flex flex-col p-3 max-w-7xl w-full mx-auto relative overflow-hidden">
+    <motion.div animate={shaking ? { x: [0, -8, 8, -6, 6, -3, 3, 0], y: [0, 4, -4, 3, -3, 1, -1, 0] } : {}} transition={{ duration: 1 }} className="flex-1 flex flex-col p-2 pt-1 max-w-7xl w-full mx-auto relative overflow-hidden">
       <AnimatePresence>
         {takeover && (
           <motion.div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -442,11 +498,11 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="flex items-center justify-end gap-2 mb-1">
+      <div className="flex items-center justify-end gap-2">
         <Wallet size={13} className="text-[#00d1ff]" />
         <span className="text-xs font-bold text-[#00d1ff]">{fmtCR(balance)}</span>
       </div>
-      <div className="relative w-full h-10 rounded-full overflow-hidden mb-3 border border-white/10">
+      <div className="relative w-full h-10 rounded-full overflow-hidden mb-1 border border-white/10">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-md" />
         <motion.div className="absolute inset-y-0 left-0 bg-[#ff007a]" animate={{ width: `${(rawA / total) * 100}%` }} />
         <motion.div className="absolute inset-y-0 right-0 bg-[#00d1ff]" animate={{ width: `${(rawB / total) * 100}%` }} />
@@ -521,7 +577,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         </div>
       </LiveKitRoom>
 
-      <div className="mt-3 h-32 bg-black/40 backdrop-blur-xl rounded-[28px] p-3 flex flex-col border border-white/5 relative flex-shrink-0">
+      <div className="mt-1 flex-1 min-h-[140px] bg-black/40 backdrop-blur-xl rounded-[28px] p-3 flex flex-col border border-white/5 relative">
         <div className="flex-1 overflow-y-auto space-y-1.5 mb-2 pr-1 flex flex-col">
           {messages.map((msg: any) => {
             const isElite = msg.text?.includes("Dominion") || msg.text?.includes("Satellite") || msg.text?.includes("Hypernova") || msg.text?.includes("VIVO Supreme");

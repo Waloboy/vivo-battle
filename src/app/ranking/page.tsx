@@ -1,27 +1,59 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Trophy, Medal, Star, ArrowLeft } from "lucide-react";
+import { Trophy, Medal, Star, ArrowLeft, Crown, Flame } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 
 export default function RankingPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [myRank, setMyRank] = useState<number | null>(null);
+  const [myProfile, setMyProfile] = useState<any>(null);
 
   useEffect(() => {
     (async () => {
-      // Fetch top 100 users ordered by wins
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setCurrentUserId(user.id);
+
+      // Fetch top 100 users ordered by points (historical accumulated score)
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, username, avatar_url, wins, total_earned")
-        .order("wins", { ascending: false })
+        .select("id, username, avatar_url, points, wins, losses, draws")
+        .order("points", { ascending: false, nullsFirst: false })
         .limit(100);
 
       if (!error && data) {
         setUsers(data);
+        
+        // Find the current user's rank
+        if (user) {
+          const userIndex = data.findIndex((u: any) => u.id === user.id);
+          if (userIndex >= 0) {
+            setMyRank(userIndex + 1);
+            setMyProfile(data[userIndex]);
+          } else {
+            // User not in top 100 — calculate their actual rank
+            const { data: myData } = await supabase
+              .from("profiles")
+              .select("id, username, avatar_url, points, wins, losses, draws")
+              .eq("id", user.id)
+              .single();
+            
+            if (myData) {
+              setMyProfile(myData);
+              const { count } = await supabase
+                .from("profiles")
+                .select("id", { count: "exact", head: true })
+                .gt("points", myData.points || 0);
+              setMyRank((count || 0) + 1);
+            }
+          }
+        }
       }
       setLoading(false);
     })();
@@ -34,10 +66,17 @@ export default function RankingPage() {
     return "transparent";
   };
 
+  const getMedalEmoji = (index: number) => {
+    if (index === 0) return "🥇";
+    if (index === 1) return "🥈";
+    if (index === 2) return "🥉";
+    return null;
+  };
+
   return (
     <div className="flex-1 flex flex-col p-4 max-w-3xl w-full mx-auto pb-24">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
+      <div className="flex items-center gap-4 mb-6">
         <Link href="/dashboard" className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">
           <ArrowLeft size={20} />
         </Link>
@@ -52,25 +91,67 @@ export default function RankingPage() {
         </div>
       </div>
 
+      {/* My Rank Card (sticky) */}
+      {myRank && myProfile && (
+        <div className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-[#ff007a]/10 to-[#00d1ff]/10 border border-[#ff007a]/20 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#ff007a]/20 flex items-center justify-center border border-[#ff007a]/30">
+              <Crown size={20} className="text-[#ff007a]" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs text-white/40">Tu posición global</p>
+              <p className="font-black text-xl text-white">#{myRank}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-white/40">Puntos acumulados</p>
+              <p className="font-black text-[#ffd700]">{(myProfile.points || 0).toLocaleString("es-VE")}</p>
+            </div>
+            <div className="text-right ml-3">
+              <p className="text-xs text-white/40">W/L/D</p>
+              <p className="text-sm font-bold text-white/70">
+                <span className="text-emerald-400">{myProfile.wins || 0}</span>
+                <span className="text-white/20"> / </span>
+                <span className="text-red-400">{myProfile.losses || 0}</span>
+                <span className="text-white/20"> / </span>
+                <span className="text-yellow-400">{myProfile.draws || 0}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center flex-1">
           <div className="w-8 h-8 border-4 border-[#ff007a] border-t-transparent rounded-full animate-spin" />
         </div>
+      ) : users.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <Flame size={40} className="text-white/10 mb-4" />
+          <p className="text-white/30 text-sm">Nadie ha ganado puntos aún. ¡Sé el primero!</p>
+        </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {users.map((u, index) => {
             const isTop3 = index < 3;
             const medalColor = getMedalColor(index);
+            const isMe = u.id === currentUserId;
+            const points = u.points || 0;
 
             return (
               <motion.div
                 key={u.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className={`flex items-center gap-4 p-4 rounded-2xl border ${isTop3 ? "bg-black/40 backdrop-blur-md" : "bg-white/[0.02] border-white/5"} relative overflow-hidden`}
+                transition={{ delay: Math.min(index * 0.03, 1.5) }}
+                className={`flex items-center gap-3 p-3.5 rounded-2xl border relative overflow-hidden transition-all ${
+                  isMe
+                    ? "bg-[#ff007a]/5 border-[#ff007a]/30 ring-1 ring-[#ff007a]/20"
+                    : isTop3
+                    ? "bg-black/40 backdrop-blur-md"
+                    : "bg-white/[0.02] border-white/5"
+                }`}
                 style={{
-                  borderColor: isTop3 ? `${medalColor}40` : undefined,
+                  borderColor: isMe ? undefined : isTop3 ? `${medalColor}40` : undefined,
                   boxShadow: isTop3 ? `0 0 20px ${medalColor}10` : undefined,
                 }}
               >
@@ -78,6 +159,7 @@ export default function RankingPage() {
                   <div className="absolute inset-0 bg-gradient-to-r opacity-10" style={{ backgroundImage: `linear-gradient(to right, ${medalColor}, transparent)` }} />
                 )}
 
+                {/* Position */}
                 <div className="relative w-8 h-8 flex items-center justify-center flex-shrink-0">
                   {isTop3 ? (
                     <Medal size={28} color={medalColor} style={{ filter: `drop-shadow(0 0 5px ${medalColor})` }} />
@@ -86,29 +168,39 @@ export default function RankingPage() {
                   )}
                 </div>
 
-                <div className="w-12 h-12 rounded-full overflow-hidden border-2 flex-shrink-0 bg-[#0a0a0a]" style={{ borderColor: isTop3 ? medalColor : "rgba(255,255,255,0.1)" }}>
+                {/* Avatar */}
+                <div className="w-11 h-11 rounded-full overflow-hidden border-2 flex-shrink-0 bg-[#0a0a0a]" style={{ borderColor: isTop3 ? medalColor : isMe ? "#ff007a" : "rgba(255,255,255,0.1)" }}>
                   {u.avatar_url ? (
-                    <img src={u.avatar_url} className="w-full h-full object-cover" />
+                    <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white/50 font-black">{u.username.charAt(0).toUpperCase()}</div>
+                    <div className="w-full h-full flex items-center justify-center text-white/50 font-black">{(u.username || "?").charAt(0).toUpperCase()}</div>
                   )}
                 </div>
 
+                {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-black text-white text-lg truncate flex items-center gap-2">
+                  <h3 className="font-black text-white text-sm truncate flex items-center gap-1.5">
                     @{u.username}
-                    {isTop3 && <Star size={12} color={medalColor} fill={medalColor} />}
+                    {isTop3 && <Star size={11} color={medalColor} fill={medalColor} />}
+                    {isMe && <span className="text-[9px] text-[#ff007a] font-bold bg-[#ff007a]/10 px-1.5 py-0.5 rounded-full border border-[#ff007a]/20">TÚ</span>}
                   </h3>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-[10px] font-bold text-[#00d1ff] uppercase tracking-wider">
-                      {u.wins} Victorias
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] font-bold text-emerald-400">
+                      {u.wins || 0}W
+                    </span>
+                    <span className="text-[10px] text-red-400">
+                      {u.losses || 0}L
+                    </span>
+                    <span className="text-[10px] text-yellow-400">
+                      {u.draws || 0}D
                     </span>
                   </div>
                 </div>
 
+                {/* Points */}
                 <div className="text-right flex-shrink-0 flex flex-col items-end justify-center">
-                  <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest mb-1">Ganancias</span>
-                  <span className="font-black text-[#ffd700]">{u.total_earned.toLocaleString()} CR</span>
+                  <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider">Puntos</span>
+                  <span className="font-black text-[#ffd700] text-sm">{points.toLocaleString("es-VE")}</span>
                 </div>
               </motion.div>
             );

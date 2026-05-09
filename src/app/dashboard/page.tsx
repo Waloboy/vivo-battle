@@ -185,8 +185,8 @@ export default function ExploreDashboard() {
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
-    // Only show battles created within the last hour to avoid stale data
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    // Strict: only battles from the last 10 minutes (stale battles auto-disappear)
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
     let query = supabase
       .from("battles")
@@ -196,7 +196,7 @@ export default function ExploreDashboard() {
         player_b:profiles!battles_player_b_id_fkey(username, avatar_url)
       `)
       .eq("is_active", true)
-      .gte("started_at", oneHourAgo)
+      .gte("started_at", tenMinAgo)
       .order("score_a", { ascending: false })
       .range(from, to);
 
@@ -213,7 +213,7 @@ export default function ExploreDashboard() {
           player_b:profiles!battles_player_b_id_fkey(username, avatar_url)
         `)
         .eq("is_active", true)
-        .gte("started_at", oneHourAgo)
+        .gte("started_at", tenMinAgo)
         .or(`player_a_id.in.(${quotedIds}),player_b_id.in.(${quotedIds})`)
         .order("score_a", { ascending: false })
         .range(from, to);
@@ -229,7 +229,7 @@ export default function ExploreDashboard() {
           player_b:profiles!battles_player_b_id_fkey(username, avatar_url)
         `)
         .eq("is_active", true)
-        .gte("started_at", oneHourAgo)
+        .gte("started_at", tenMinAgo)
         .order("started_at", { ascending: false })
         .range(from, to);
     }
