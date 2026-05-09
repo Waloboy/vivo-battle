@@ -63,3 +63,14 @@ export function crToBs(credits: number, bcvRate: number): number {
 export function bsToUsd(bs: number, bcvRate: number): number {
   return bcvRate > 0 ? bs / bcvRate : 0;
 }
+
+/**
+ * Convert Bolívares → Credits
+ * REGLA DE ORO: CR = Bs / (Tasa / 100)
+ * @param bs       Amount in Bolívares
+ * @param bcvRate  BCV rate: Bs per 1 USD
+ */
+export function bsToCr(bs: number, bcvRate: number): number {
+  const rate = bcvRate > 0 ? bcvRate : 500;
+  return Math.floor(bs / (rate / 100));
+}

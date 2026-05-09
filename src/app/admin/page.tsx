@@ -6,12 +6,8 @@ import {
   ShieldAlert, Sparkles, Scissors, Copy, CheckCheck, ChevronDown, ChevronUp, Swords, Trophy
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
+import { fmtWCR, fmtBCR, fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
 import { useAuth } from "@/components/AuthProvider";
-
-// ── Local Formatters ──
-const fmtWCR = (value: number) => Math.floor(value).toLocaleString("es-VE") + " WCR";
-const fmtBCR = (value: number) => Math.floor(value).toLocaleString("es-VE") + " BCR";
 
 type Tab = "transactions" | "settlement" | "battle_settlement";
 
@@ -178,8 +174,8 @@ export default function AdminDashboard() {
       return;
     }
 
-    // 2. Update the user profile balance if it's a deposit
-    if (txn.type === "deposit" || txn.type === "DEPOSIT_PENDING") {
+    // 2. If deposit: add WCR to profile
+    if (txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING") {
       const { data: prof } = await supabase.from("profiles").select("wallet_credits").eq("id", txn.user_id).single();
       if (prof) {
         await supabase.from("profiles").update({
@@ -207,8 +203,8 @@ export default function AdminDashboard() {
       return;
     }
 
-    // 2. If it was a withdrawal, return the credits to the user
-    if (txn.type === "withdrawal") {
+    // 2. If withdrawal rejected: return BCR to user
+    if (txn.type === "WITHDRAW" || txn.type === "withdrawal") {
       const { data: prof } = await supabase.from("profiles").select("battle_credits").eq("id", txn.user_id).single();
       if (prof) {
         await supabase.from("profiles").update({
@@ -329,8 +325,8 @@ export default function AdminDashboard() {
                 <div key={txn.id} className="cyber-glass rounded-2xl p-4 border border-white/5 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "text-[#00d1ff]" : txn.type === "gift" || txn.type === "GIFT_SENT" ? "text-[#e056fd]" : txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" : "text-white/50"}`}>
-                        {txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "Recarga" : txn.type === "gift" || txn.type === "GIFT_SENT" ? "Gift" : txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "Batalla" : "Retiro"}
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "text-[#00d1ff]" : txn.type === "gift" || txn.type === "GIFT_SENT" ? "text-[#e056fd]" : txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" : "text-white/50"}`}>
+                        {txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "Recarga" : txn.type === "gift" || txn.type === "GIFT_SENT" ? "Gift" : txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "Batalla" : "Retiro"}
                       </span>
                       <p className="font-semibold text-sm mt-0.5">@{prof?.username || "—"}</p>
                     </div>
@@ -394,8 +390,8 @@ export default function AdminDashboard() {
                     return (
                       <tr key={txn.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                         <td className="px-4 py-3">
-                          <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "text-[#00d1ff]" : (txn.type === "gift" || txn.type === "GIFT_SENT" ? "text-[#e056fd]" : (txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" : "text-white/50"))}`}>
-                            {txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "Depósito" : (txn.type === "gift" || txn.type === "GIFT_SENT" ? "Gift" : (txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "Batalla" : "Retiro"))}
+                          <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "text-[#00d1ff]" : (txn.type === "gift" || txn.type === "GIFT_SENT" ? "text-[#e056fd]" : (txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" : "text-white/50"))}`}>
+                            {txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "Depósito" : (txn.type === "gift" || txn.type === "GIFT_SENT" ? "Gift" : (txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "Batalla" : "Retiro"))}
                           </span>
                         </td>
                         <td className="px-4 py-3 font-medium text-[#00d1ff]">@{prof?.username || "—"}</td>
