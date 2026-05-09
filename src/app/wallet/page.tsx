@@ -266,52 +266,52 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
             <button onClick={() => setIsReloadModalOpen(false)} className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors">Cerrar</button>
           </div>
         ) : (
-          <div className="space-y-5">
-            <div className="bg-[#00d1ff]/10 border border-[#00d1ff]/20 rounded-xl p-4 text-sm text-[#00d1ff]">
-              Realiza un Pago Móvil y reporta tu pago para recibir los créditos.
+          <div className="flex flex-col gap-4">
+            <div className="bg-[#00d1ff]/10 border border-[#00d1ff]/20 rounded-xl p-3 text-xs text-[#00d1ff] leading-relaxed">
+              Realiza un Pago Móvil y reporta tu pago para recibir WCR.
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {[["Banco","Banesco (0134)"],["Teléfono","0414.637.0819"],["Cédula","16.842.909"]].map(([k,v]) => (
-                <div key={k} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 text-sm">
-                  <span className="text-white/50 font-light">{k}</span>
-                  <span className="font-semibold">{v}</span>
+                <div key={k} className="flex items-center justify-between px-3 py-2 bg-white/5 rounded-lg border border-white/5 text-xs">
+                  <span className="text-white/40">{k}</span>
+                  <span className="font-semibold text-white/80">{v}</span>
                 </div>
               ))}
             </div>
             
-            <div className="space-y-3">
+            <div className="flex flex-col gap-3">
               <div>
-                <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Tu Banco Emisor</label>
+                <label className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">Banco Emisor</label>
                 <select 
                   value={selectedBank} 
                   onChange={e => setSelectedBank(e.target.value)}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#ff007a] transition-colors appearance-none"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#ff007a] transition-colors appearance-none"
                 >
                   {VZLA_BANKS.map(b => <option key={b} value={b} className="bg-zinc-900">{b}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Monto a Recargar (BS)</label>
-                <input id="wallet-amount-bs" name="wallet-amount-bs" type="text" value={amountBs} onChange={e => setAmountBs(e.target.value)} placeholder="Ej. 150,50"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[#ff007a] transition-colors" />
+                <label className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">Monto (Bs)</label>
+                <input id="wallet-amount-bs" name="wallet-amount-bs" type="text" value={amountBs} onChange={e => setAmountBs(e.target.value)} placeholder="Ej. 500"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#ff007a] transition-colors" />
                 {amountBs && !isNaN(parseFloat(amountBs.replace(",", "."))) && (
-                  <p className="text-[12px] font-medium text-[#00d1ff] mt-2 flex items-center justify-between bg-[#00d1ff]/10 p-2 rounded-lg border border-[#00d1ff]/20">
-                    <span>Recibirás:</span>
-                    <span className="font-black text-sm">{fmtWCR(Math.floor(parseFloat(amountBs.replace(",", ".")) / (safeTasa / 100)))}</span>
-                  </p>
+                  <div className="mt-1.5 flex items-center justify-between bg-[#00d1ff]/10 px-3 py-1.5 rounded-lg border border-[#00d1ff]/20">
+                    <span className="text-[10px] text-[#00d1ff]/70">Recibirás</span>
+                    <span className="font-black text-xs text-[#00d1ff]">{fmtWCR(Math.floor(parseFloat(amountBs.replace(",", ".")) / (safeTasa / 100)))}</span>
+                  </div>
                 )}
               </div>
               
               <div>
-                <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Referencia (Últimos 6 dígitos)</label>
+                <label className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">Referencia (6 dígitos)</label>
                 <input id="wallet-ref-number" name="wallet-ref-number" type="text" maxLength={6} value={refNumber} onChange={e => setRefNumber(e.target.value.replace(/\D/g, ""))} placeholder="123456"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[#ff007a] transition-colors" />
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#ff007a] transition-colors" />
               </div>
             </div>
             <button onClick={handleRechargeSubmit} disabled={isSubmitting || !user}
-              className="w-full py-3.5 bg-[#ff007a] hover:bg-[#ff007a]/80 disabled:opacity-50 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
-              {isSubmitting && <Loader2 className="animate-spin" size={16}/>} Reportar Pago
+              className="w-full py-3 bg-[#ff007a] hover:bg-[#ff007a]/80 disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2">
+              {isSubmitting && <Loader2 className="animate-spin" size={14}/>} Reportar Pago
             </button>
           </div>
         )}
@@ -326,47 +326,47 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
             <button onClick={() => setIsWithdrawModalOpen(false)} className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors">Cerrar</button>
           </div>
         ) : (
-          <div className="space-y-5">
-            <div className="bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-white/60">
-              Los créditos se convertirán a BS según la tasa BCV y se enviarán a tus datos bancarios.
+          <div className="flex flex-col gap-4">
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white/60 leading-relaxed">
+              Tus BCR se convertirán a Bs según la tasa BCV actual.
             </div>
             {!profile?.phone_number ? (
-              <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm">
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-xs">
                 Configura tus datos bancarios en Perfil antes de retirar.
               </div>
             ) : (
-              <div className="p-3 bg-black/30 rounded-xl border border-white/5 text-sm space-y-1">
-                <span className="text-white/30 text-[10px] uppercase tracking-wider block mb-1">Destino</span>
-                <p className="font-semibold">{profile.bank_name}</p>
-                <p className="text-white/60">{profile.id_card} · {profile.phone_number}</p>
+              <div className="px-3 py-2 bg-black/30 rounded-xl border border-white/5 text-xs space-y-0.5">
+                <span className="text-white/30 text-[9px] uppercase tracking-wider block">Destino</span>
+                <p className="font-semibold text-white/80">{profile.bank_name}</p>
+                <p className="text-white/50">{profile.id_card} · {profile.phone_number}</p>
               </div>
             )}
             <div>
-              <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Créditos a Retirar (BCR)</label>
+              <label className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">BCR a Retirar</label>
               <input id="wallet-withdraw-amount" name="wallet-withdraw-amount" type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Ej. 5000"
-                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors" />
-              <p className="text-[11px] text-white/30 mt-1">Saldo BCR disponible: {fmtBCR(dualBal.battle_credits)}</p>
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors" />
+              <p className="text-[10px] text-white/30 mt-1">Disponible: {fmtBCR(dualBal.battle_credits)}</p>
               
               {withdrawAmount && !isNaN(parseInt(withdrawAmount)) && (
-                <div className="mt-3 space-y-2 p-3 bg-white/5 rounded-xl border border-white/10">
-                  <div className="flex justify-between text-xs text-white/60">
-                    <span>Monto bruto:</span>
+                <div className="mt-2 space-y-1.5 p-2.5 bg-white/5 rounded-xl border border-white/10">
+                  <div className="flex justify-between text-[11px] text-white/50">
+                    <span>Bruto:</span>
                     <span>{fmtBs(parseInt(withdrawAmount) * (safeTasa / 100))}</span>
                   </div>
-                  <div className="flex justify-between text-xs text-[#ff007a]">
-                    <span>Comisión (15%):</span>
-                    <span>- {fmtBs((parseInt(withdrawAmount) * (safeTasa / 100)) * 0.15)}</span>
+                  <div className="flex justify-between text-[11px] text-[#ff007a]">
+                    <span>Comisión 15%:</span>
+                    <span>-{fmtBs((parseInt(withdrawAmount) * (safeTasa / 100)) * 0.15)}</span>
                   </div>
-                  <div className="pt-2 border-t border-white/10 flex justify-between font-bold text-sm text-emerald-400">
-                    <span>Neto a recibir:</span>
+                  <div className="pt-1.5 border-t border-white/10 flex justify-between font-bold text-xs text-emerald-400">
+                    <span>Neto:</span>
                     <span>{fmtBs((parseInt(withdrawAmount) * (safeTasa / 100)) * 0.85)}</span>
                   </div>
                 </div>
               )}
             </div>
             <button onClick={handleWithdrawSubmit} disabled={isSubmitting || !profile?.phone_number}
-              className="w-full py-3.5 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
-              {isSubmitting && <Loader2 className="animate-spin" size={16}/>} Solicitar Retiro
+              className="w-full py-3 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2">
+              {isSubmitting && <Loader2 className="animate-spin" size={14}/>} Solicitar Retiro
             </button>
           </div>
         )}

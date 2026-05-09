@@ -102,37 +102,36 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="flex flex-col items-center gap-6"
-            >
-              <div className="flex items-center gap-8 mb-4">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-20 h-20 rounded-full border-2 border-[#00d1ff] p-1">
+            >              <div className="flex items-center gap-4 sm:gap-8 mb-2">
+                <div className="flex flex-col items-center gap-1.5">
+                  <div className="rounded-full border-2 border-[#00d1ff] p-0.5" style={{ width: 'clamp(48px, 14vw, 80px)', height: 'clamp(48px, 14vw, 80px)' }}>
                     <div className="w-full h-full rounded-full bg-white/5 flex items-center justify-center overflow-hidden">
-                      {playerA?.avatar_url ? <img src={playerA.avatar_url} className="w-full h-full object-cover" /> : <div className="text-[#00d1ff] font-bold">A</div>}
+                      {playerA?.avatar_url ? <img src={playerA.avatar_url} className="w-full h-full object-cover" /> : <div className="text-[#00d1ff] font-bold text-xs">A</div>}
                     </div>
                   </div>
-                  <span className="text-white font-black text-sm tracking-widest uppercase">@{playerA?.username}</span>
+                  <span className="text-white font-black tracking-wider uppercase truncate max-w-[25vw]" style={{ fontSize: 'clamp(9px, 2.5vw, 13px)' }}>@{playerA?.username}</span>
                 </div>
-                <div className="text-white/20 text-3xl font-black italic">VS</div>
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-20 h-20 rounded-full border-2 border-[#ff007a] p-1">
+                <div className="text-white/20 font-black italic" style={{ fontSize: 'clamp(1rem, 4vw, 1.8rem)' }}>VS</div>
+                <div className="flex flex-col items-center gap-1.5">
+                  <div className="rounded-full border-2 border-[#ff007a] p-0.5" style={{ width: 'clamp(48px, 14vw, 80px)', height: 'clamp(48px, 14vw, 80px)' }}>
                     <div className="w-full h-full rounded-full bg-white/5 flex items-center justify-center overflow-hidden">
-                      {playerB?.avatar_url ? <img src={playerB.avatar_url} className="w-full h-full object-cover" /> : <div className="text-[#ff007a] font-bold">B</div>}
+                      {playerB?.avatar_url ? <img src={playerB.avatar_url} className="w-full h-full object-cover" /> : <div className="text-[#ff007a] font-bold text-xs">B</div>}
                     </div>
                   </div>
-                  <span className="text-white font-black text-sm tracking-widest uppercase">@{playerB?.username}</span>
+                  <span className="text-white font-black tracking-wider uppercase truncate max-w-[25vw]" style={{ fontSize: 'clamp(9px, 2.5vw, 13px)' }}>@{playerB?.username}</span>
                 </div>
               </div>
               
-              <div className="text-center space-y-1">
-                <span className="text-[#00d1ff] font-black tracking-[0.3em] text-xs uppercase animate-pulse">Esperando público...</span>
-                <h2 className="text-4xl md:text-6xl font-black text-white italic tracking-tighter drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+              <div className="text-center space-y-0.5 px-4">
+                <span className="text-[#00d1ff] font-black tracking-[0.2em] uppercase animate-pulse" style={{ fontSize: 'clamp(8px, 2.2vw, 12px)' }}>Esperando público...</span>
+                <h2 className="font-black text-white italic tracking-tighter" style={{ fontSize: 'clamp(1.2rem, 5vw, 2.5rem)', textShadow: '0 0 10px rgba(255,255,255,0.2)' }}>
                   PREPARANDO <span className="text-[#ff007a]">BATALLA</span>
                 </h2>
               </div>
 
-              <div className="mt-4 flex flex-col items-center gap-2">
-                <div className="text-white/40 text-sm font-medium">Inicia en</div>
-                <div className="text-5xl font-black text-white font-mono">{fmtTime(displayTime)}</div>
+              <div className="mt-2 flex flex-col items-center gap-1">
+                <div className="text-white/40 font-medium" style={{ fontSize: 'clamp(10px, 2.5vw, 14px)' }}>Inicia en</div>
+                <div className="font-black text-white font-mono" style={{ fontSize: 'clamp(1.8rem, 8vw, 3.5rem)' }}>{fmtTime(displayTime)}</div>
               </div>
             </motion.div>
           )}
@@ -149,7 +148,7 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
             exit={{ scale: 0.5, opacity: 0 }}
             className="absolute inset-0 flex items-center justify-center z-[50] pointer-events-none"
           >
-            <span className="text-[6rem] md:text-[10rem] font-black text-white italic drop-shadow-[0_0_20px_rgba(255,0,122,0.8)]">
+            <span className="font-black text-white italic" style={{ fontSize: 'clamp(3rem, 15vw, 7rem)', textShadow: '0 0 15px rgba(255,0,122,0.8)' }}>
               {displayTime}
             </span>
           </motion.div>
@@ -165,8 +164,8 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
             transition={{ duration: 2 }}
             className="absolute inset-0 flex items-center justify-center z-[60] pointer-events-none"
           >
-            <div className="bg-[#ff007a] px-8 py-3 skew-x-[-12deg] border-2 border-white shadow-[0_0_30px_#ff007a]">
-              <span className="text-4xl md:text-6xl font-black text-white italic tracking-tighter">¡BATALLA!</span>
+            <div className="bg-[#ff007a] px-6 py-2 skew-x-[-12deg] border-2 border-white shadow-[0_0_20px_#ff007a]">
+              <span className="font-black text-white italic tracking-tighter" style={{ fontSize: 'clamp(1.5rem, 7vw, 3.5rem)' }}>¡BATALLA!</span>
             </div>
           </motion.div>
         )}

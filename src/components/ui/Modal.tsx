@@ -38,10 +38,10 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative w-full max-w-md cyber-glass p-6 rounded-2xl shadow-2xl border-white/10"
+            className="relative w-full max-w-md max-h-[90vh] overflow-y-auto cyber-glass p-4 sm:p-6 rounded-2xl shadow-2xl border-white/10"
           >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-white">{title}</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base sm:text-xl font-bold text-white">{title}</h2>
               <button
                 onClick={onClose}
                 className="p-2 rounded-full hover:bg-white/10 transition-colors"
