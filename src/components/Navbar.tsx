@@ -5,95 +5,45 @@ import { usePathname, useRouter } from "next/navigation";
 import { Swords, User, Wallet, LogOut, ShieldAlert, Compass, MessageCircle } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { useAuth } from "@/components/AuthProvider";
 
 export function Navbar() {
-  const [user, setUser] = useState<any>(null);
-  const [role, setRole] = useState<string>("user");
+  const { user, isAdmin } = useAuth();
   const [unreadMessages, setUnreadMessages] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
-    const checkUnread = async (userId: string) => {
+    if (!user) return;
+
+    const checkUnread = async () => {
       const { count } = await supabase
         .from("messages")
         .select("*", { count: "exact", head: true })
-        .eq("receiver_id", userId)
+        .eq("receiver_id", user.id)
         .eq("is_read", false);
       setUnreadMessages(!!count && count > 0);
     };
+    checkUnread();
 
-    const checkUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (data.user) {
-        setUser(data.user);
-        checkUnread(data.user.id);
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", data.user.id)
-          .single();
-        if (profile) setRole(profile.role);
-      } else {
-        setUser(null);
-      }
-    };
-    checkUser();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event: any, session: any) => {
-        if (session?.user) {
-          setUser(session.user);
-          checkUnread(session.user.id);
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", session.user.id)
-            .single();
-          if (profile) setRole(profile.role);
-        } else {
-          setUser(null);
-          setRole("user");
-          setUnreadMessages(false);
-        }
-      }
-    );
-
-    // Listen for new unread messages globally
-    let channel: any = null;
-    const setupRealtime = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      channel = supabase.channel("navbar-messages")
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "messages" },
-          (payload: any) => {
-            if (payload.new.receiver_id === user.id && !payload.new.is_read) {
-              setUnreadMessages(true);
-            }
-          }
-        )
-        .on(
-          "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "messages" },
-          (payload: any) => {
-            if (payload.new.receiver_id === user.id && payload.new.is_read) {
-              checkUnread(user.id);
-            }
-          }
-        )
-        .subscribe();
-    };
-    setupRealtime();
+    const channel = supabase.channel("navbar-messages")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `receiver_id=eq.${user.id}` },
+        () => setUnreadMessages(true)
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages", filter: `receiver_id=eq.${user.id}` },
+        () => checkUnread()
+      )
+      .subscribe();
 
     return () => {
-      authListener.subscription.unsubscribe();
-      if (channel) supabase.removeChannel(channel);
+      supabase.removeChannel(channel);
     };
-  }, [supabase]);
+  }, [user, supabase]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -156,7 +106,7 @@ export function Navbar() {
               <span className="hidden sm:block">Perfil</span>
             </Link>
             
-            {role === "admin" && (
+            {isAdmin && (
               <Link 
                 href="/admin" 
                 className={`flex items-center gap-2 transition-colors ${pathname === '/admin' ? 'text-yellow-400' : 'text-white/50 hover:text-yellow-400'}`}

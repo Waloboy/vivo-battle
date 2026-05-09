@@ -27,7 +27,10 @@ export default function Dashboard() {
   const [bcvRate, setBcvRate] = useState<number | null>(null);
   const [dualBal, setDualBal] = useState<DualBalance>({ wallet_credits: 0, battle_credits: 0, total: 0 });
 
+const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provincial", "BNC", "Bancaribe", "Banco Exterior", "Banco del Tesoro", "Banco Bicentenario", "Otro"];
+
   // Recharge State
+  const [selectedBank, setSelectedBank] = useState(VZLA_BANKS[0]);
   const [amountBs, setAmountBs] = useState("");
   const [refNumber, setRefNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,10 +76,11 @@ export default function Dashboard() {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) { alert("Sesión expirada."); return; }
     setIsSubmitting(true);
-    const amountCredits = Math.floor(parseFloat(amountBs) * 10);
+    // Tasa: 100 CR = 5 Bs  =>  1 Bs = 20 CR
+    const amountCredits = Math.floor(parseFloat(amountBs.replace(",", ".")) * 20);
     const { error } = await supabase.from("transactions").insert({
       user_id: currentUser.id, type: "deposit",
-      amount_bs: parseFloat(amountBs), amount_credits: amountCredits,
+      amount_bs: parseFloat(amountBs.replace(",", ".")), amount_credits: amountCredits,
       reference_number: refNumber, status: "pending"
     });
     setIsSubmitting(false);
@@ -87,15 +91,19 @@ export default function Dashboard() {
   const handleWithdrawSubmit = async () => {
     if (!withdrawAmount) return;
     const amountCredits = parseInt(withdrawAmount);
-    if (amountCredits > dualBal.battle_credits) { alert(`Solo puedes retirar de tus ganancias de batalla (BCR). Tienes ${fmtCR(dualBal.battle_credits)} BCR disponibles.`); return; }
+    if (amountCredits > dualBal.wallet_credits) { alert(`Solo puedes retirar de tu Billetera (WCR). Tienes ${fmtCR(dualBal.wallet_credits)} WCR disponibles.`); return; }
     if (!profile?.phone_number) { alert("Configura tus datos bancarios en el Perfil."); return; }
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) { alert("Sesión expirada."); return; }
     setIsSubmitting(true);
-    const bsAmount = amountCredits / 10;
+    
+    // Tasa: 100 CR = 5 Bs  =>  1 Bs = 20 CR
+    const grossBsAmount = amountCredits / 20;
+    const netBsAmount = grossBsAmount * 0.85; // Descuento 15%
+    
     const { error } = await supabase.from("transactions").insert({
       user_id: currentUser.id, type: "withdrawal",
-      amount_credits: amountCredits, amount_bs: bsAmount, status: "pending"
+      amount_credits: amountCredits, amount_bs: netBsAmount, status: "pending"
     });
     setIsSubmitting(false);
     if (error) { alert("Error: " + error.message); }
@@ -248,19 +256,38 @@ export default function Dashboard() {
               Realiza un Pago Móvil y reporta tu pago para recibir los créditos.
             </div>
             <div className="space-y-2">
-              {[["Banco","Banesco (0134)"],["Teléfono","0414-1234567"],["Cédula","V-12345678"]].map(([k,v]) => (
+              {[["Banco","Banesco (0134)"],["Teléfono","0414.637.0819"],["Cédula","16.842.909"]].map(([k,v]) => (
                 <div key={k} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 text-sm">
                   <span className="text-white/50 font-light">{k}</span>
                   <span className="font-semibold">{v}</span>
                 </div>
               ))}
             </div>
+            
             <div className="space-y-3">
               <div>
-                <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Monto (BS)</label>
-                <input id="wallet-amount-bs" name="wallet-amount-bs" type="number" value={amountBs} onChange={e => setAmountBs(e.target.value)} placeholder="Ej. 150.50"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[#ff007a] transition-colors" />
+                <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Tu Banco Emisor</label>
+                <select 
+                  value={selectedBank} 
+                  onChange={e => setSelectedBank(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#ff007a] transition-colors appearance-none"
+                >
+                  {VZLA_BANKS.map(b => <option key={b} value={b} className="bg-zinc-900">{b}</option>)}
+                </select>
               </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Monto a Recargar (BS)</label>
+                <input id="wallet-amount-bs" name="wallet-amount-bs" type="text" value={amountBs} onChange={e => setAmountBs(e.target.value)} placeholder="Ej. 150,50"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[#ff007a] transition-colors" />
+                {amountBs && !isNaN(parseFloat(amountBs.replace(",", "."))) && (
+                  <p className="text-[12px] font-medium text-[#00d1ff] mt-2 flex items-center justify-between bg-[#00d1ff]/10 p-2 rounded-lg border border-[#00d1ff]/20">
+                    <span>Recibirás:</span>
+                    <span className="font-black text-sm">{fmtCR(Math.floor(parseFloat(amountBs.replace(",", ".")) * 20))} WCR</span>
+                  </p>
+                )}
+              </div>
+              
               <div>
                 <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Referencia (Últimos 6 dígitos)</label>
                 <input id="wallet-ref-number" name="wallet-ref-number" type="text" maxLength={6} value={refNumber} onChange={e => setRefNumber(e.target.value.replace(/\D/g, ""))} placeholder="123456"
@@ -300,10 +327,27 @@ export default function Dashboard() {
               </div>
             )}
             <div>
-              <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Créditos a Retirar</label>
+              <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Créditos a Retirar (WCR)</label>
               <input id="wallet-withdraw-amount" name="wallet-withdraw-amount" type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Ej. 5000"
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors" />
-              <p className="text-[11px] text-white/30 mt-1">Saldo: {balance.toLocaleString()} CR</p>
+              <p className="text-[11px] text-white/30 mt-1">Saldo WCR: {fmtCR(dualBal.wallet_credits)}</p>
+              
+              {withdrawAmount && !isNaN(parseInt(withdrawAmount)) && (
+                <div className="mt-3 space-y-2 p-3 bg-white/5 rounded-xl border border-white/10">
+                  <div className="flex justify-between text-xs text-white/60">
+                    <span>Monto bruto:</span>
+                    <span>{fmtBs(parseInt(withdrawAmount) / 20)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-[#ff007a]">
+                    <span>Comisión (15%):</span>
+                    <span>- {fmtBs((parseInt(withdrawAmount) / 20) * 0.15)}</span>
+                  </div>
+                  <div className="pt-2 border-t border-white/10 flex justify-between font-bold text-sm text-emerald-400">
+                    <span>Neto a recibir:</span>
+                    <span>{fmtBs((parseInt(withdrawAmount) / 20) * 0.85)}</span>
+                  </div>
+                </div>
+              )}
             </div>
             <button onClick={handleWithdrawSubmit} disabled={isSubmitting || !profile?.phone_number}
               className="w-full py-3.5 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2">

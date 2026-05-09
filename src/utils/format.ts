@@ -15,10 +15,10 @@ export function fmtCR(value: number): string {
 
 /** Format Bolívares — 2 decimal places, dot as thousands, comma as decimal */
 export function fmtBs(value: number): string {
-  const fixed = value.toFixed(2);
-  const [int, dec] = fixed.split(".");
-  const formattedInt = int.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return `${formattedInt},${dec} Bs`;
+  return value.toLocaleString("es-VE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }) + " Bs";
 }
 
 /** Format US Dollars — 2 decimal places, US locale */

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { fmtCR, fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
+import { useAuth } from "@/components/AuthProvider";
 
 type Tab = "transactions" | "settlement" | "battle_settlement";
 
@@ -35,11 +36,11 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function AdminDashboard() {
   const supabase = createClient();
+  const { user: authUser, isAdmin, loading: authLoading } = useAuth();
   const [tab, setTab] = useState<Tab>("transactions");
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   // Settlement
   const [settlement, setSettlement] = useState<SettlementRow[]>([]);
@@ -53,19 +54,16 @@ export default function AdminDashboard() {
   const [bcrBattles, setBcrBattles] = useState<any[]>([]);
   const [bcvRate, setBcvRate] = useState<number | null>(null);
 
-  useEffect(() => { checkAdminAndFetch(); }, []);
+  useEffect(() => {
+    if (!authUser || !isAdmin) return;
+    initAdmin();
+  }, [authUser, isAdmin]);
 
-  const checkAdminAndFetch = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setIsAdmin(false); setLoading(false); return; }
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-    if (profile?.role !== "admin") { setIsAdmin(false); setLoading(false); return; }
-    setIsAdmin(true);
-    // Load BCV rate
+  const initAdmin = async () => {
     const { data: rateRow } = await supabase.from("app_config").select("value").eq("key", "bcv_rate").single();
     if (rateRow?.value) { const r = parseFloat(rateRow.value); setBcvRate(r); setExchangeRate(Math.round(r / 100 * 100) / 100); }
     await fetchTransactions();
-    setLoading(false);
+    setDataLoading(false);
   };
 
   const fetchTransactions = async () => {
@@ -138,8 +136,8 @@ export default function AdminDashboard() {
       map.get(w.user_id)!.total_cr += w.amount_credits;
     }
     for (const row of map.values()) {
-      row.user_share_cr = row.total_cr; // 100% of battle wins go to user
-      row.app_share_cr = 0;
+      row.user_share_cr = Math.floor(row.total_cr * 0.6);
+      row.app_share_cr = row.total_cr - row.user_share_cr;
       row.user_payout_bs = (row.user_share_cr / 100) * exchangeRate;
     }
     setBcrSettlement(Array.from(map.values()).sort((a, b) => b.total_cr - a.total_cr));
@@ -177,8 +175,8 @@ export default function AdminDashboard() {
   };
 
   // ── Guards ──
-  if (loading) return <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#ff007a]" size={40}/></div>;
-  if (isAdmin === false) return (
+  if (authLoading || (isAdmin && dataLoading)) return <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#ff007a]" size={40}/></div>;
+  if (!isAdmin) return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
       <ShieldAlert className="text-red-500" size={56}/>
       <h1 className="text-2xl font-black">Acceso Denegado</h1>
@@ -541,13 +539,13 @@ export default function AdminDashboard() {
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#00d1ff] to-[#ff007a] flex items-center justify-center"><Trophy size={14} className="text-white"/></div>
                       <div className="text-left">
                         <p className="font-semibold text-[#00d1ff] text-sm">@{row.username}</p>
-                        <p className="text-[10px] text-white/30 mt-0.5">{userBattles.length} victoria{userBattles.length !== 1 ? 's' : ''} · {fmtCR(row.total_cr)} BCR</p>
+                        <p className="text-[10px] text-white/30 mt-0.5">{userBattles.length} victoria{userBattles.length !== 1 ? 's' : ''} · {fmtCR(row.total_cr)} total · 60% → {fmtCR(row.user_share_cr)}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <p className="text-base font-black text-[#ffd700]">{fmtBs(row.user_payout_bs)}</p>
-                        <p className="text-[10px] text-white/30">{fmtUSD(crToUsd(row.total_cr))}</p>
+                        <p className="text-[10px] text-white/30">{fmtUSD(crToUsd(row.user_share_cr))}</p>
                       </div>
                       {row.paid
                         ? <span className="text-[10px] text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">✓ Pagado</span>
@@ -602,11 +600,17 @@ export default function AdminDashboard() {
                         <div className="bg-[#00d1ff]/5 border border-[#00d1ff]/15 rounded-lg px-3 py-2">
                           <p className="text-white/30 text-[10px] mb-0.5">Total BCR</p>
                           <p className="font-bold text-[#00d1ff]">{fmtCR(row.total_cr)}</p>
-                          <p className="text-[10px] text-white/30 mt-0.5">{fmtUSD(crToUsd(row.total_cr))}</p>
+                          <p className="text-[10px] text-white/30 mt-0.5">{fmtUSD(crToUsd(row.total_cr))}{bcvRate ? ` · ${fmtBs(crToBs(row.total_cr, bcvRate))}` : ""}</p>
+                        </div>
+                        <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-3 py-2">
+                          <p className="text-white/30 text-[10px] mb-0.5">60% usuario</p>
+                          <p className="font-bold text-emerald-400">{fmtCR(row.user_share_cr)}</p>
+                          <p className="text-[10px] text-white/30 mt-0.5">{fmtBs(row.user_payout_bs)} · {fmtUSD(crToUsd(row.user_share_cr))}</p>
                         </div>
                         <div className="bg-[#ffd700]/5 border border-[#ffd700]/15 rounded-lg px-3 py-2">
-                          <p className="text-white/30 text-[10px] mb-0.5">Pago Bs</p>
-                          <p className="font-bold text-[#ffd700]">{fmtBs(row.user_payout_bs)}</p>
+                          <p className="text-white/30 text-[10px] mb-0.5">40% app</p>
+                          <p className="font-bold text-[#ffd700]">{fmtCR(row.app_share_cr)}</p>
+                          <p className="text-[10px] text-white/30 mt-0.5">{fmtUSD(crToUsd(row.app_share_cr))}{bcvRate ? ` · ${fmtBs(crToBs(row.app_share_cr, bcvRate))}` : ""}</p>
                         </div>
                       </div>
 
