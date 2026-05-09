@@ -59,6 +59,32 @@ export function ChallengeNotification() {
           config: { broadcast: { self: false } },
         })
         .on(
+          "broadcast",
+          { event: "CHALLENGE_RECEIVED" },
+          async (payload: any) => {
+            if (!mounted || !userIdRef.current) return;
+            const p = payload.payload;
+            
+            // Only show if the broadcast challenge is meant for us
+            if (p.challenged_id === userIdRef.current) {
+              // Fetch username for UI
+              const { data: prof } = await supabase
+                .from("profiles")
+                .select("username")
+                .eq("id", p.challenger_id)
+                .single();
+
+              setChallenge({
+                id: p.id,
+                challenger_id: p.challenger_id,
+                challenger_username: prof?.username || "???",
+              });
+              setHidden(false);
+            }
+          }
+        )
+        // Keep DB fallback just in case we miss the broadcast (e.g., page refresh)
+        .on(
           "postgres_changes",
           {
             event: "INSERT",
@@ -68,19 +94,27 @@ export function ChallengeNotification() {
           },
           async (payload: any) => {
             if (!mounted || !userIdRef.current) return;
+            // Only handle if not already active to avoid duplicates
             if (payload.new.status === "pending") {
-              const { data: prof } = await supabase
-                .from("profiles")
-                .select("username")
-                .eq("id", payload.new.challenger_id)
-                .single();
+              // If we already have a challenge modal open, don't override it immediately
+              setChallenge(prev => {
+                if (prev && prev.id === payload.new.id) return prev; // Already showing
+                
+                // Fetch and set in background
+                supabase.from("profiles").select("username").eq("id", payload.new.challenger_id).single()
+                  .then(({ data: prof }: { data: { username: string } | null }) => {
+                    if (mounted) {
 
-              setChallenge({
-                id: payload.new.id,
-                challenger_id: payload.new.challenger_id,
-                challenger_username: prof?.username || "???",
+                      setChallenge({
+                        id: payload.new.id,
+                        challenger_id: payload.new.challenger_id,
+                        challenger_username: prof?.username || "???",
+                      });
+                      setHidden(false);
+                    }
+                  });
+                return prev;
               });
-              setHidden(false);
             }
           }
         )

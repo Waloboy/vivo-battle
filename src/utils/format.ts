@@ -6,11 +6,18 @@
  *  - USD ($)  → US locale:         1,250.50  (comma = thousands, dot = decimal)
  */
 
-/** Format Credits — no decimals, dot as thousands separator */
-export function fmtCR(value: number): string {
+/** Format Wallet Credits (WCR) — no decimals, dot as thousands separator */
+export function fmtWCR(value: number): string {
   const intPart = Math.floor(value).toString();
   const formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return formatted + " CR";
+  return formatted + " WCR";
+}
+
+/** Format Battle Credits (BCR) — no decimals, dot as thousands separator */
+export function fmtBCR(value: number): string {
+  const intPart = Math.floor(value).toString();
+  const formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return formatted + " BCR";
 }
 
 /** Format Bolívares — 2 decimal places, dot as thousands, comma as decimal */

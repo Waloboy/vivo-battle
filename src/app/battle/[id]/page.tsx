@@ -12,7 +12,7 @@ import { createClient } from "@/utils/supabase/client";
 import { GIFT_CATALOG, type GiftKey } from "../gifts";
 import { useAnimatedCount } from "../useAnimatedCount";
 import { getUserBalance, getWalletCredits } from "@/utils/balance";
-import { fmtCR } from "@/utils/format";
+import { fmtWCR, fmtBCR } from "@/utils/format";
 
 import { LiveKitRoom, VideoTrack, useTracks, useLocalParticipant, useParticipants } from '@livekit/components-react';
 import { Track } from 'livekit-client';
@@ -446,7 +446,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     try {
       // Gifts deduct from wallet_credits (WCR) only
       const walletBal = await getWalletCredits(user.id);
-      if (walletBal < gift.cost) { alert(`Saldo WCR insuficiente. Necesitas ${fmtCR(gift.cost)} en tu billetera (depósitos).`); return; }
+      if (walletBal < gift.cost) { alert(`Saldo WCR insuficiente. Necesitas ${fmtWCR(gift.cost)} en tu billetera (depósitos).`); return; }
       setIsSending(true);
       playSound("gift");
       const { error: txError } = await supabase.from("transactions").insert({ user_id: user.id, type: "gift", amount_credits: -gift.cost, amount_bs: 0, reference_number: `Envío Regalo: ${gift.label} a ${side}`, status: "approved" });
@@ -459,7 +459,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       if (side === "A") { setRawA(p => p + gift.cost); pendingScoreA.current += gift.cost; }
       else { setRawB(p => p + gift.cost); pendingScoreB.current += gift.cost; }
       
-      const msg = { id: Date.now(), username: profile.username, text: `sent ${gift.label} (${fmtCR(gift.cost)})`, isGift: true, color: gift.color, tier: gift.tier };
+      const msg = { id: Date.now(), username: profile.username, text: `sent ${gift.label} (${fmtWCR(gift.cost)})`, isGift: true, color: gift.color, tier: gift.tier };
       await supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "chat", payload: msg });
       setMessages(p => [...p, msg]);
       await new Promise(r => setTimeout(r, 600));
@@ -511,18 +511,33 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       </AnimatePresence>
       <div className="flex items-center justify-end gap-2 px-2">
         <Wallet size={13} className="text-[#00d1ff]" />
-        <span className="text-xs font-bold text-[#00d1ff]">{fmtCR(balance)}</span>
+        <span className="text-xs font-bold text-[#00d1ff]">{fmtWCR(balance)}</span>
       </div>
+      {/* ── Progress Bar (No Text Overlap) ── */}
       <div className="relative w-full h-8 overflow-hidden border-b border-white/10">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-md" />
         <motion.div className="absolute inset-y-0 left-0 bg-[#ff007a]" animate={{ width: `${(rawA / total) * 100}%` }} />
         <motion.div className="absolute inset-y-0 right-0 bg-[#00d1ff]" animate={{ width: `${(rawB / total) * 100}%` }} />
-        <div className="absolute inset-0 flex items-center justify-center z-10">
-          <div className="bg-black/60 backdrop-blur-md border border-white/10 px-4 py-1 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
-            <span className={`font-[family-name:var(--font-orbitron)] font-black text-lg tracking-[0.15em] ${isUrgent ? "text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]" : "text-white"}`}>
+      </div>
+
+      {/* ── Info Bar: Scores, Usernames, Timer ── */}
+      <div className="w-full flex items-center justify-between px-6 py-2 bg-[#0d0008] border-b border-white/10 relative z-20">
+        <div className="flex flex-col items-start min-w-[80px]">
+          <span className="font-black text-xl text-[#ff007a] leading-none mb-1">{displayA.toLocaleString()}</span>
+          <span className="text-white/80 text-[11px] font-bold tracking-wider">@{playerA?.username || 'Cargando...'}</span>
+        </div>
+        
+        <div className="flex items-center justify-center flex-1">
+          <div className="bg-black/80 backdrop-blur-md border border-white/10 px-6 py-1.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
+            <span className={`font-[family-name:var(--font-orbitron)] font-black text-xl tracking-[0.15em] ${isUrgent ? "text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]" : "text-white"}`}>
               {phase === "waiting" ? "ESPERANDO..." : phase === "warmup" ? `PREPARANDO... ${fmtTime(displayTime)}` : fmtTime(displayTime)}
             </span>
           </div>
+        </div>
+
+        <div className="flex flex-col items-end min-w-[80px]">
+          <span className="font-black text-xl text-[#00d1ff] leading-none mb-1">{displayB.toLocaleString()}</span>
+          <span className="text-white/80 text-[11px] font-bold tracking-wider">@{playerB?.username || 'Cargando...'}</span>
         </div>
       </div>
 
@@ -560,7 +575,6 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
               )}
             </div>
             <motion.div className="absolute inset-0 z-[1] pointer-events-none" animate={glowA ? { boxShadow: ["inset 0 0 40px #ff007a40", "inset 0 0 80px #ff007a60", "inset 0 0 40px #ff007a40"] } : {}} />
-            <div className="absolute top-3 left-3 z-10 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 pointer-events-none"><span className="font-black text-sm text-[#ff007a]">{displayA.toLocaleString()}</span></div>
             <AnimatePresence>
               {tapsA.map(t => (
                 <motion.div key={t.id} className="absolute z-20 pointer-events-none" style={{ left: `${t.x}%`, top: `${t.y}%` }} initial={{ opacity: 0.6, scale: 0.6 }} animate={{ opacity: 0, scale: 1.8, y: -150, x: (Math.random()-0.5)*50 }} transition={{ duration: 1.2, ease: "easeOut" }}><Heart size={24} color="#ff007a" fill="none" strokeWidth={1.5} style={{ filter: "drop-shadow(0 0 8px #ff007a)" }} /></motion.div>
@@ -582,7 +596,6 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
               )}
             </div>
             <motion.div className="absolute inset-0 z-[1] pointer-events-none" animate={glowB ? { boxShadow: ["inset 0 0 40px #00d1ff40", "inset 0 0 80px #00d1ff60", "inset 0 0 40px #00d1ff40"] } : {}} />
-            <div className="absolute top-3 right-3 z-10 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 pointer-events-none"><span className="font-black text-sm text-[#00d1ff]">{displayB.toLocaleString()}</span></div>
             <AnimatePresence>
               {tapsB.map(t => (
                 <motion.div key={t.id} className="absolute z-20 pointer-events-none" style={{ left: `${t.x}%`, top: `${t.y}%` }} initial={{ opacity: 0.6, scale: 0.6 }} animate={{ opacity: 0, scale: 1.8, y: -150, x: (Math.random()-0.5)*50 }} transition={{ duration: 1.2, ease: "easeOut" }}><Heart size={24} color="#00d1ff" fill="none" strokeWidth={1.5} style={{ filter: "drop-shadow(0 0 8px #00d1ff)" }} /></motion.div>
@@ -625,7 +638,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                 </div>
                 <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/10">
                   <Wallet size={14} className="text-[#ffd700]" />
-                  <span className="text-sm font-black text-[#ffd700]">{fmtCR(balance)}</span>
+                  <span className="text-sm font-black text-[#ffd700]">{fmtWCR(balance)}</span>
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-4 mb-8">
@@ -669,9 +682,26 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                     <h1 className="text-3xl font-black italic tracking-tight uppercase text-white" style={{ textShadow: `0 0 15px ${winData.side === "A" ? "#ff007a" : "#00d1ff"}` }}>
                       ¡GANADOR @{winData.profile.username}!
                     </h1>
+                    {mySide === winData.side && (
+                      <p className="text-lg font-bold text-[#00ffcc] drop-shadow-[0_0_8px_rgba(0,255,204,0.5)]">
+                        Ganaste: +{fmtBCR(rawA + rawB)}
+                      </p>
+                    )}
+                    {mySide !== "Audience" && mySide !== winData.side && (
+                      <p className="text-lg font-bold text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
+                        Perdiste: -{fmtWCR(mySide === "A" ? rawA : rawB)}
+                      </p>
+                    )}
                   </div>
                 ) : (
-                   <h1 className="text-4xl font-black italic tracking-tight uppercase text-white drop-shadow-[0_0_15px_#fff]">EMPATE</h1>
+                   <div className="flex flex-col items-center justify-center gap-3">
+                     <h1 className="text-4xl font-black italic tracking-tight uppercase text-white drop-shadow-[0_0_15px_#fff]">EMPATE</h1>
+                     {mySide !== "Audience" && (
+                       <p className="text-lg font-bold text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]">
+                         {fmtWCR(0)}
+                       </p>
+                     )}
+                   </div>
                 )}
               </div>
 

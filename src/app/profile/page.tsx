@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { User, MapPin, Building2, Loader2, Save, CheckCircle2, Phone, FileText, Edit2, ArrowLeft, CreditCard, History, Sparkles, TrendingUp, Users, UserCheck, UserPlus, Camera, Trophy, X, Swords } from "lucide-react";
 import { motion } from "framer-motion";
 import { createClient } from "@/utils/supabase/client";
-import { fmtCR, fmtUSD, fmtBs } from "@/utils/format";
+import { fmtWCR, fmtBCR, fmtUSD, fmtBs } from "@/utils/format";
 import { getUserBalance, getDualBalance, type DualBalance } from "../../utils/balance";
 import Link from "next/link";
 
@@ -293,7 +293,7 @@ export default function ProfilePage() {
             <div className="col-span-2 cyber-glass rounded-[2rem] p-5 flex items-center justify-between border-white/5">
               <div>
                 <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Total Ganado Histórico</p>
-                <p className="text-2xl font-black text-[#ffd700]">{fmtCR(profile?.total_earned || 0)}</p>
+                <p className="text-2xl font-black text-[#ffd700]">{fmtWCR(profile?.total_earned || 0)}</p>
               </div>
               <div className="w-12 h-12 rounded-full bg-[#ffd700]/10 flex items-center justify-center border border-[#ffd700]/20">
                 <Trophy size={20} className="text-[#ffd700]" />
@@ -310,18 +310,18 @@ export default function ProfilePage() {
             <div>
               <p className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Balance Total</p>
               <div className="flex items-baseline gap-2 mb-4">
-                <span className="text-3xl font-black text-white">{fmtCR(balance)}</span>
+                <span className="text-3xl font-black text-white">{fmtWCR(balance)}</span>
               </div>
               {/* WCR / BCR split */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-[#ff007a]/5 rounded-xl p-3 border border-[#ff007a]/10">
                   <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">WCR (Billetera)</p>
-                  <p className="text-lg font-black text-[#ff007a]">{fmtCR(dualBal.wallet_credits)}</p>
+                  <p className="text-lg font-black text-[#ff007a]">{fmtWCR(dualBal.wallet_credits)}</p>
                   <p className="text-[10px] text-white/25 mt-0.5">Depósitos · Gifts</p>
                 </div>
                 <div className="bg-[#00d1ff]/5 rounded-xl p-3 border border-[#00d1ff]/10">
                   <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">BCR (Batallas)</p>
-                  <p className="text-lg font-black text-[#00d1ff]">{fmtCR(dualBal.battle_credits)}</p>
+                  <p className="text-lg font-black text-[#00d1ff]">{fmtBCR(dualBal.battle_credits)}</p>
                   <p className="text-[10px] text-white/25 mt-0.5">Ganancias · Retirable</p>
                 </div>
               </div>
@@ -362,7 +362,7 @@ export default function ProfilePage() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-sm font-black text-emerald-400">+{fmtCR(b.amount_credits)}</span>
+                    <span className="text-sm font-black text-emerald-400">+{fmtWCR(b.amount_credits)}</span>
                   </div>
                 ))}
               </div>

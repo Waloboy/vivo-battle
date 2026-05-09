@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Wallet, Plus, ArrowUpRight, History, Loader2, CheckCircle2, Sparkles, TrendingUp } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { createClient } from "@/utils/supabase/client";
-import { fmtCR, fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
+import { fmtWCR, fmtBCR, fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
 import { getUserBalance, getDualBalance, type DualBalance } from "../../utils/balance";
 
 // ── Utility: dynamic font size for large numbers ──
@@ -91,7 +91,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
   const handleWithdrawSubmit = async () => {
     if (!withdrawAmount) return;
     const amountCredits = parseInt(withdrawAmount);
-    if (amountCredits > dualBal.wallet_credits) { alert(`Solo puedes retirar de tu Billetera (WCR). Tienes ${fmtCR(dualBal.wallet_credits)} WCR disponibles.`); return; }
+    if (amountCredits > dualBal.wallet_credits) { alert(`Solo puedes retirar de tu Billetera (WCR). Tienes ${fmtWCR(dualBal.wallet_credits)} WCR disponibles.`); return; }
     if (!profile?.phone_number) { alert("Configura tus datos bancarios en el Perfil."); return; }
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) { alert("Sesión expirada."); return; }
@@ -134,7 +134,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
             {/* ── Credits (primary) ── */}
             <div className="flex items-baseline gap-2 flex-wrap min-w-0">
               <span className={`font-black leading-none truncate ${balanceFontSize(balance)}`}>
-                {fmtCR(balance)}
+                {fmtWCR(balance)}
               </span>
             </div>
 
@@ -155,11 +155,11 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
             <div className="grid grid-cols-2 gap-3 mt-2">
               <div className="bg-[#ff007a]/5 rounded-xl p-3 border border-[#ff007a]/10">
                 <p className="text-[10px] text-white/30 uppercase tracking-wider mb-0.5">WCR (Billetera)</p>
-                <p className="text-base font-black text-[#ff007a]">{fmtCR(dualBal.wallet_credits)}</p>
+                <p className="text-base font-black text-[#ff007a]">{fmtWCR(dualBal.wallet_credits)}</p>
               </div>
               <div className="bg-[#00d1ff]/5 rounded-xl p-3 border border-[#00d1ff]/10">
                 <p className="text-[10px] text-white/30 uppercase tracking-wider mb-0.5">BCR (Batallas)</p>
-                <p className="text-base font-black text-[#00d1ff]">{fmtCR(dualBal.battle_credits)}</p>
+                <p className="text-base font-black text-[#00d1ff]">{fmtBCR(dualBal.battle_credits)}</p>
               </div>
             </div>
 
@@ -283,7 +283,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
                 {amountBs && !isNaN(parseFloat(amountBs.replace(",", "."))) && (
                   <p className="text-[12px] font-medium text-[#00d1ff] mt-2 flex items-center justify-between bg-[#00d1ff]/10 p-2 rounded-lg border border-[#00d1ff]/20">
                     <span>Recibirás:</span>
-                    <span className="font-black text-sm">{fmtCR(Math.floor(parseFloat(amountBs.replace(",", ".")) * 20))} WCR</span>
+                    <span className="font-black text-sm">{fmtWCR(Math.floor(parseFloat(amountBs.replace(",", ".")) * 20))} WCR</span>
                   </p>
                 )}
               </div>
@@ -330,7 +330,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
               <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Créditos a Retirar (WCR)</label>
               <input id="wallet-withdraw-amount" name="wallet-withdraw-amount" type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Ej. 5000"
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors" />
-              <p className="text-[11px] text-white/30 mt-1">Saldo WCR: {fmtCR(dualBal.wallet_credits)}</p>
+              <p className="text-[11px] text-white/30 mt-1">Saldo WCR: {fmtWCR(dualBal.wallet_credits)}</p>
               
               {withdrawAmount && !isNaN(parseInt(withdrawAmount)) && (
                 <div className="mt-3 space-y-2 p-3 bg-white/5 rounded-xl border border-white/10">

@@ -234,10 +234,18 @@ export default function ExploreDashboard() {
         .range(from, to);
     }
 
-    const { data, error } = await query;
+    // Anti-hang timeout (3 seconds)
+    const timeoutPromise = new Promise<{data: any, error: any}>((resolve) => 
+      setTimeout(() => resolve({ data: null, error: new Error("TIMEOUT") }), 3000)
+    );
+
+    const { data, error } = await Promise.race([query, timeoutPromise]) as {data: any, error: any};
 
     if (error) {
       console.error("Error fetching battles:", error);
+      if (error.message === "TIMEOUT" && !append) {
+        setBattles([]); // Fallback to empty state
+      }
       setLoading(false);
       setLoadingMore(false);
       return;
@@ -339,7 +347,30 @@ export default function ExploreDashboard() {
   const sendChallenge = async (targetId: string) => {
     if (!user || challengeSending) return;
     setChallengeSending(targetId);
-    await supabase.from("challenges").insert({ challenger_id: user.id, challenged_id: targetId });
+    
+    // Generar un ID predecible o único para el broadcast
+    const challengeId = crypto.randomUUID();
+
+    // 1. Enviar Broadcast (Instantáneo, bypass de DB)
+    const channel = supabase.channel("global-challenge-listener");
+    await channel.send({
+      type: "broadcast",
+      event: "CHALLENGE_RECEIVED",
+      payload: {
+        id: challengeId,
+        challenger_id: user.id,
+        challenged_id: targetId,
+        timestamp: Date.now()
+      }
+    });
+
+    // 2. Guardar en DB para persistencia
+    await supabase.from("challenges").insert({ 
+      id: challengeId, 
+      challenger_id: user.id, 
+      challenged_id: targetId 
+    });
+
     setChallengeSent(prev => new Set(prev).add(targetId));
     setChallengeSending(null);
   };
