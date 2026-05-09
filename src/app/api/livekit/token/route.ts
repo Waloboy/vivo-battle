@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     });
 
     const canPublish = role !== 'Audience';
-    at.addGrant({ roomJoin: true, room: room, canPublish, canPublishData: true });
+    at.addGrant({ roomJoin: true, room: room, canPublish, canSubscribe: true, canPublishData: true });
 
     const token = await at.toJwt();
     console.log(`[LiveKit Token API] Token successfully generated for ${username}`);

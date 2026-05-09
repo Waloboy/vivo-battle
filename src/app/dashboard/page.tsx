@@ -135,6 +135,9 @@ export default function ExploreDashboard() {
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
+    // Only show battles created within the last hour to avoid stale data
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
     let query = supabase
       .from("battles")
       .select(`
@@ -143,6 +146,7 @@ export default function ExploreDashboard() {
         player_b:profiles!battles_player_b_id_fkey(username, avatar_url)
       `)
       .eq("is_active", true)
+      .gte("started_at", oneHourAgo)
       .order("score_a", { ascending: false })
       .range(from, to);
 
@@ -157,6 +161,7 @@ export default function ExploreDashboard() {
           player_b:profiles!battles_player_b_id_fkey(username, avatar_url)
         `)
         .eq("is_active", true)
+        .gte("started_at", oneHourAgo)
         .or(`player_a_id.in.(${followedArray.join(",")}),player_b_id.in.(${followedArray.join(",")})`)
         .order("score_a", { ascending: false })
         .range(from, to);
@@ -172,6 +177,7 @@ export default function ExploreDashboard() {
           player_b:profiles!battles_player_b_id_fkey(username, avatar_url)
         `)
         .eq("is_active", true)
+        .gte("started_at", oneHourAgo)
         .order("started_at", { ascending: false })
         .range(from, to);
     }
@@ -367,7 +373,7 @@ export default function ExploreDashboard() {
       <div className="flex gap-2 mb-4">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/20" />
-          <input type="text" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }} onFocus={() => setSearchOpen(true)} placeholder="Buscar usuario para retar..." className="w-full bg-white/[0.03] border border-white/5 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-[#ff007a]/30 transition-colors" />
+          <input id="dashboard-search" name="dashboard-search" type="text" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }} onFocus={() => setSearchOpen(true)} placeholder="Buscar usuario para retar..." className="w-full bg-white/[0.03] border border-white/5 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-[#ff007a]/30 transition-colors" />
           <AnimatePresence>
             {searchOpen && searchResults.length > 0 && (
               <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="absolute top-full left-0 right-0 mt-1.5 bg-[#0d0d0d] border border-white/10 rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.8)] z-30">

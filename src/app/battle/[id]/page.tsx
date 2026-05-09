@@ -536,7 +536,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
           <div ref={messagesEnd} />
         </div>
         <div className="flex gap-2 items-center">
-          <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === "Enter" && sendMsg()} placeholder="Type a message..." className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-2 text-white text-xs placeholder-white/20 focus:outline-none focus:border-[#00d1ff]/40" />
+          <input id="battle-chat-msg" name="battle-chat-msg" type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === "Enter" && sendMsg()} placeholder="Type a message..." className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-2 text-white text-xs placeholder-white/20 focus:outline-none focus:border-[#00d1ff]/40" autoComplete="off" />
           <button onClick={async () => { setShowGiftSheet(true); if(user) setBalance(await getUserBalance(user.id)); }} disabled={phase !== "battle"} className="p-2 text-white/30 hover:text-[#ffd700] disabled:opacity-20 transition-colors"><Gift size={20} /></button>
           <button onClick={sendMsg} disabled={!newMessage.trim()} className="bg-[#00d1ff] disabled:opacity-30 text-black p-2 rounded-xl font-bold"><Send size={18} /></button>
         </div>

@@ -99,35 +99,44 @@ export default function AuthPage() {
               >
                 <label className="block text-sm font-medium text-white/70 mb-1">Usuario Único</label>
                 <input
+                  id="auth-username"
+                  name="username"
                   type="text"
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#ff007a] transition-colors"
                   placeholder="@tu_usuario"
+                  autoComplete="username"
                 />
               </motion.div>
             )}
             <div>
               <label className="block text-sm font-medium text-white/70 mb-1">Correo Electrónico</label>
               <input
+                id="auth-email"
+                name="email"
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
                 placeholder="correo@ejemplo.com"
+                autoComplete="email"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-white/70 mb-1">Contraseña</label>
               <input
+                id="auth-password"
+                name="password"
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00d1ff] transition-colors"
                 placeholder="••••••••"
+                autoComplete="current-password"
               />
             </div>
 

@@ -242,12 +242,12 @@ export default function Dashboard() {
             <div className="space-y-3">
               <div>
                 <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Monto (BS)</label>
-                <input type="number" value={amountBs} onChange={e => setAmountBs(e.target.value)} placeholder="Ej. 150.50"
+                <input id="wallet-amount-bs" name="wallet-amount-bs" type="number" value={amountBs} onChange={e => setAmountBs(e.target.value)} placeholder="Ej. 150.50"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[#ff007a] transition-colors" />
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Referencia (Últimos 6 dígitos)</label>
-                <input type="text" maxLength={6} value={refNumber} onChange={e => setRefNumber(e.target.value.replace(/\D/g, ""))} placeholder="123456"
+                <input id="wallet-ref-number" name="wallet-ref-number" type="text" maxLength={6} value={refNumber} onChange={e => setRefNumber(e.target.value.replace(/\D/g, ""))} placeholder="123456"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-[#ff007a] transition-colors" />
               </div>
             </div>
@@ -285,7 +285,7 @@ export default function Dashboard() {
             )}
             <div>
               <label className="block text-[11px] font-medium text-white/40 mb-1 uppercase tracking-wider">Créditos a Retirar</label>
-              <input type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Ej. 5000"
+              <input id="wallet-withdraw-amount" name="wallet-withdraw-amount" type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Ej. 5000"
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors" />
               <p className="text-[11px] text-white/30 mt-1">Saldo: {balance.toLocaleString()} CR</p>
             </div>

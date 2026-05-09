@@ -322,7 +322,7 @@ export default function AdminDashboard() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-white/40 text-sm">100 CR =</span>
-              <input type="number" value={exchangeRate}
+              <input id="admin-exchange-rate" name="admin-exchange-rate" type="number" value={exchangeRate}
                 onChange={e => setExchangeRate(Number(e.target.value))}
                 className="w-24 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white font-bold text-center focus:outline-none focus:border-[#ffd700]/50"/>
               <span className="text-white/40 text-sm">Bs</span>

@@ -175,6 +175,8 @@ export default function ProfilePage() {
   return (
     <div className="flex-1 max-w-2xl w-full mx-auto p-4 md:p-8 pb-24">
       <input 
+        id="profile-avatar-upload"
+        name="avatar"
         type="file" 
         accept="image/*" 
         className="hidden" 
@@ -380,10 +382,13 @@ export default function ProfilePage() {
                     <span className="text-white/40 font-bold">@</span>
                   </div>
                   <input
+                    id="profile-username"
+                    name="username"
                     type="text"
                     value={profile?.username || ""}
                     onChange={(e) => setProfile({ ...profile, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })}
                     className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-8 pr-12 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
+                    autoComplete="username"
                   />
                   <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
                     {usernameStatus === "checking" && <Loader2 size={16} className="animate-spin text-white/40" />}
@@ -410,11 +415,14 @@ export default function ProfilePage() {
                     <User size={16} className="text-white/40" />
                   </div>
                   <input
+                    id="profile-fullname"
+                    name="full_name"
                     type="text"
                     value={profile?.full_name || ""}
                     onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
                     className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
                     placeholder="Tu nombre real"
+                    autoComplete="name"
                   />
                 </div>
               </div>
@@ -426,6 +434,8 @@ export default function ProfilePage() {
                     <MapPin size={16} className="text-white/40" />
                   </div>
                   <input
+                    id="profile-city"
+                    name="city"
                     type="text"
                     value={profile?.city || ""}
                     onChange={(e) => setProfile({ ...profile, city: e.target.value })}
@@ -442,6 +452,8 @@ export default function ProfilePage() {
                     <FileText size={16} className="text-white/40" />
                   </div>
                   <input
+                    id="profile-id-card"
+                    name="id_card"
                     type="text"
                     value={profile?.id_card || ""}
                     onChange={(e) => setProfile({ ...profile, id_card: e.target.value })}
@@ -458,11 +470,14 @@ export default function ProfilePage() {
                     <Phone size={16} className="text-white/40" />
                   </div>
                   <input
+                    id="profile-phone"
+                    name="phone_number"
                     type="text"
                     value={profile?.phone_number || ""}
                     onChange={(e) => setProfile({ ...profile, phone_number: e.target.value })}
                     className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
                     placeholder="0414-1234567"
+                    autoComplete="tel"
                   />
                 </div>
               </div>
@@ -474,6 +489,8 @@ export default function ProfilePage() {
                     <Building2 size={16} className="text-white/40" />
                   </div>
                   <input
+                    id="profile-bank"
+                    name="bank_name"
                     type="text"
                     value={profile?.bank_name || ""}
                     onChange={(e) => setProfile({ ...profile, bank_name: e.target.value })}
