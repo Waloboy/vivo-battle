@@ -20,18 +20,18 @@ export default function RankingPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setCurrentUserId(user.id);
 
-      // Fetch top 100 users ordered by points (historical accumulated score)
+      // Fetch top 100 users ordered by total_earned (historical accumulated score)
       let { data, error } = await supabase
         .from("profiles")
-        .select("id, username, avatar_url, points, wins, losses, draws")
-        .order("points", { ascending: false, nullsFirst: false })
+        .select("id, username, avatar_url, total_earned, wins, losses, draws")
+        .order("total_earned", { ascending: false, nullsFirst: false })
         .limit(100);
 
-      // Fallback: if no one has points, show users by creation date
-      if (!error && (!data || data.length === 0 || data.every((u: any) => !u.points || u.points === 0))) {
+      // Fallback: if no one has total_earned, show users by creation date
+      if (!error && (!data || data.length === 0 || data.every((u: any) => !u.total_earned || u.total_earned === 0))) {
         const fallback = await supabase
           .from("profiles")
-          .select("id, username, avatar_url, points, wins, losses, draws")
+          .select("id, username, avatar_url, total_earned, wins, losses, draws")
           .order("created_at", { ascending: false })
           .limit(100);
         if (!fallback.error && fallback.data) {
@@ -53,7 +53,7 @@ export default function RankingPage() {
             // User not in top 100 — calculate their actual rank
             const { data: myData } = await supabase
               .from("profiles")
-              .select("id, username, avatar_url, points, wins, losses, draws")
+              .select("id, username, avatar_url, total_earned, wins, losses, draws")
               .eq("id", user.id)
               .single();
             
@@ -62,7 +62,7 @@ export default function RankingPage() {
               const { count } = await supabase
                 .from("profiles")
                 .select("id", { count: "exact", head: true })
-                .gt("points", myData.points || 0);
+                .gt("total_earned", myData.total_earned || 0);
               setMyRank((count || 0) + 1);
             }
           }
@@ -116,8 +116,8 @@ export default function RankingPage() {
               <p className="font-black text-xl text-white">#{myRank}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-white/40">Puntos acumulados</p>
-              <p className="font-black text-[#ffd700]">{(myProfile.points || 0).toLocaleString("es-VE")}</p>
+              <p className="text-xs text-white/40">Créditos Históricos</p>
+              <p className="font-black text-[#ffd700]">{(myProfile.total_earned || 0).toLocaleString("es-VE")}</p>
             </div>
             <div className="text-right ml-3">
               <p className="text-xs text-white/40">W/L/D</p>
@@ -140,7 +140,7 @@ export default function RankingPage() {
       ) : users.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <Flame size={40} className="text-white/10 mb-4" />
-          <p className="text-white/30 text-sm">Nadie ha ganado puntos aún. ¡Sé el primero!</p>
+          <p className="text-white/30 text-sm">Nadie ha ganado créditos aún. ¡Sé el primero!</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -148,7 +148,7 @@ export default function RankingPage() {
             const isTop3 = index < 3;
             const medalColor = getMedalColor(index);
             const isMe = u.id === currentUserId;
-            const points = u.points || 0;
+            const totalEarned = u.total_earned || 0;
 
             return (
               <motion.div
@@ -212,8 +212,8 @@ export default function RankingPage() {
 
                 {/* Points */}
                 <div className="text-right flex-shrink-0 flex flex-col items-end justify-center">
-                  <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider">Puntos</span>
-                  <span className="font-black text-[#ffd700] text-sm">{points.toLocaleString("es-VE")}</span>
+                  <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider">Histórico</span>
+                  <span className="font-black text-[#ffd700] text-sm">{totalEarned.toLocaleString("es-VE")}</span>
                 </div>
               </motion.div>
             );

@@ -320,13 +320,22 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
             }).eq("id", id);
 
             if (winnerId) {
-              const { data: winnerProfile } = await supabase.from("profiles").select("points, wins").eq("id", winnerId).single();
+              const { data: winnerProfile } = await supabase.from("profiles").select("total_earned, wins").eq("id", winnerId).single();
               if (winnerProfile) {
                 await supabase.from("profiles").update({
-                  points: (winnerProfile.points || 0) + totalPoints,
+                  total_earned: (winnerProfile.total_earned || 0) + totalPoints,
                   wins: (winnerProfile.wins || 0) + 1,
                 }).eq("id", winnerId);
               }
+              // Insert transaction so the winner gets the credits in their balance
+              await supabase.from("transactions").insert({
+                user_id: winnerId,
+                type: "bonus",
+                amount_credits: totalPoints,
+                amount_bs: 0,
+                status: "approved",
+                reference_number: `Victoria en Batalla: ${id}`
+              });
             }
             if (loserId) {
               const { data: loserProfile } = await supabase.from("profiles").select("losses").eq("id", loserId).single();
@@ -532,9 +541,11 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         <div className="grid grid-cols-2 gap-0 flex-1 relative min-h-0">
           {mySide !== "Audience" && <LocalControls isWarmup={phase === "warmup" || phase === "waiting"} />}
 
-          <div className={`relative overflow-hidden select-none aspect-[3/4] ${phase === "battle" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("A", e)}>
+          <div className={`relative overflow-hidden select-none w-full h-full ${phase === "battle" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("A", e)}>
             <div className="absolute inset-0 bg-[#0d0008]" />
-            <BattleVideo expectedUsername={playerA?.username} phase={phase} />
+            <div className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full absolute inset-0">
+              <BattleVideo expectedUsername={playerA?.username} phase={phase} />
+            </div>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[1]">
               {(!playerA?.username || phase === "warmup" || phase === "waiting") && (
                 <>
@@ -552,9 +563,11 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
             </AnimatePresence>
           </div>
 
-          <div className={`relative overflow-hidden select-none aspect-[3/4] border-l border-white/10 ${phase === "battle" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("B", e)}>
+          <div className={`relative overflow-hidden select-none w-full h-full ${phase === "battle" ? "cursor-pointer" : "cursor-not-allowed opacity-80"}`} onClick={(e) => handleTap("B", e)}>
             <div className="absolute inset-0 bg-[#000810]" />
-            <BattleVideo expectedUsername={playerB?.username} phase={phase} />
+            <div className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full absolute inset-0">
+              <BattleVideo expectedUsername={playerB?.username} phase={phase} />
+            </div>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[1]">
               {(!playerB?.username || phase === "warmup" || phase === "waiting") && (
                 <>

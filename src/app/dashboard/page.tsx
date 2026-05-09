@@ -161,16 +161,16 @@ export default function ExploreDashboard() {
 
       // Load follows — only if we have a valid user ID
       const { data: follows, error: followsError } = await supabase
-        .from("follows")
-        .select("followed_id")
-        .eq("follower_id", user.id);
+        .from("follow")
+        .select("following_id")
+        .eq("follow_id", user.id);
 
       if (followsError) {
         console.error("[Dashboard] Follows query error:", followsError.message);
       } else if (follows) {
-        // Filter out any malformed followed_ids
+        // Filter out any malformed following_ids
         const validFollows = follows
-          .map((f: any) => f.followed_id)
+          .map((f: any) => f.following_id)
           .filter((id: string) => id && uuidRegex.test(id));
         setFollowedUsers(new Set(validFollows));
       }
@@ -299,10 +299,10 @@ export default function ExploreDashboard() {
     if (isFollowing) {
       // Unfollow
       await supabase
-        .from("follows")
+        .from("follow")
         .delete()
-        .eq("follower_id", user.id)
-        .eq("followed_id", targetUserId);
+        .eq("follow_id", user.id)
+        .eq("following_id", targetUserId);
 
       setFollowedUsers(prev => {
         const next = new Set(prev);
@@ -312,8 +312,8 @@ export default function ExploreDashboard() {
     } else {
       // Follow
       await supabase
-        .from("follows")
-        .insert({ follower_id: user.id, followed_id: targetUserId });
+        .from("follow")
+        .insert({ follow_id: user.id, following_id: targetUserId });
 
       setFollowedUsers(prev => new Set(prev).add(targetUserId));
     }

@@ -45,7 +45,7 @@ export default function ProfilePage() {
         setOriginalUsername(data.username);
         
         // Calculate rank based on accumulated points
-        const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).gt('points', data.points || 0);
+        const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).gt('total_earned', data.total_earned || 0);
         setRankPosition((count || 0) + 1);
 
         if (data.last_username_change) {
@@ -68,8 +68,8 @@ export default function ProfilePage() {
 
       // Fetch social counts
       const [followersRes, followingRes, battlesRes] = await Promise.all([
-        supabase.from("follows").select("id", { count: "exact", head: true }).eq("followed_id", user.id),
-        supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id),
+        supabase.from("follow").select("id", { count: "exact", head: true }).eq("following_id", user.id),
+        supabase.from("follow").select("id", { count: "exact", head: true }).eq("follow_id", user.id),
         supabase.from("battles").select("id", { count: "exact", head: true }).or(`player_a_id.eq.${user.id},player_b_id.eq.${user.id}`),
       ]);
 
