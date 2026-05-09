@@ -419,7 +419,6 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
           try {
             const winnerId = rawA > rawB ? battleData?.player_a_id : rawB > rawA ? battleData?.player_b_id : null;
             const loserId = rawA > rawB ? battleData?.player_b_id : rawB > rawA ? battleData?.player_a_id : null;
-            const totalPoints = rawA + rawB;
 
             // AGGRESSIVE AUTO-CLOSE: mark battle as finished IMMEDIATELY
             await supabase.from("battles").update({
@@ -427,36 +426,57 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
               is_active: false,
             }).eq("id", id);
 
-            if (winnerId) {
-              const { data: winnerProfile } = await supabase.from("profiles").select("total_earned, wins, battle_credits").eq("id", winnerId).single();
-              if (winnerProfile) {
+            // Settle Player A
+            if (battleData?.player_a_id && rawA > 0) {
+              const pAId = battleData.player_a_id;
+              const { data: profA } = await supabase.from("profiles").select("total_earned, battle_credits").eq("id", pAId).single();
+              if (profA) {
                 await supabase.from("profiles").update({
-                  total_earned: (winnerProfile.total_earned || 0) + totalPoints,
-                  wins: (winnerProfile.wins || 0) + 1,
-                  battle_credits: (winnerProfile.battle_credits || 0) + totalPoints,
-                }).eq("id", winnerId);
+                  total_earned: (profA.total_earned || 0) + rawA,
+                  battle_credits: (profA.battle_credits || 0) + rawA,
+                }).eq("id", pAId);
               }
-              // Battle win → goes to battle_credits (BCR)
-              const opponentId = winnerId === battleData?.player_a_id ? battleData?.player_b_id : battleData?.player_a_id;
-              const { data: opponentProf } = await supabase.from("profiles").select("username").eq("id", opponentId).single();
               await supabase.from("transactions").insert({
-                user_id: winnerId,
+                user_id: pAId,
                 type: "BATTLE_WIN",
-                amount_credits: totalPoints,
+                amount_credits: rawA,
                 amount_bs: 0,
                 status: "approved",
-                reference_number: `BATALLA GANADA vs @${opponentProf?.username || 'rival'}`,
-                opponent_id: opponentId,
+                reference_number: `BATALLA vs @${playerB?.username || 'rival'}`,
+                opponent_id: battleData?.player_b_id,
                 battle_id: id,
               });
             }
+
+            // Settle Player B
+            if (battleData?.player_b_id && rawB > 0) {
+              const pBId = battleData.player_b_id;
+              const { data: profB } = await supabase.from("profiles").select("total_earned, battle_credits").eq("id", pBId).single();
+              if (profB) {
+                await supabase.from("profiles").update({
+                  total_earned: (profB.total_earned || 0) + rawB,
+                  battle_credits: (profB.battle_credits || 0) + rawB,
+                }).eq("id", pBId);
+              }
+              await supabase.from("transactions").insert({
+                user_id: pBId,
+                type: "BATTLE_WIN",
+                amount_credits: rawB,
+                amount_bs: 0,
+                status: "approved",
+                reference_number: `BATALLA vs @${playerA?.username || 'rival'}`,
+                opponent_id: battleData?.player_a_id,
+                battle_id: id,
+              });
+            }
+
+            if (winnerId) {
+              const { data: winnerProfile } = await supabase.from("profiles").select("wins").eq("id", winnerId).single();
+              if (winnerProfile) await supabase.from("profiles").update({ wins: (winnerProfile.wins || 0) + 1 }).eq("id", winnerId);
+            }
             if (loserId) {
               const { data: loserProfile } = await supabase.from("profiles").select("losses").eq("id", loserId).single();
-              if (loserProfile) {
-                await supabase.from("profiles").update({
-                  losses: (loserProfile.losses || 0) + 1,
-                }).eq("id", loserId);
-              }
+              if (loserProfile) await supabase.from("profiles").update({ losses: (loserProfile.losses || 0) + 1 }).eq("id", loserId);
             }
             if (!winnerId && !loserId) {
               for (const pid of [battleData?.player_a_id, battleData?.player_b_id]) {
@@ -465,7 +485,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                 if (p) await supabase.from("profiles").update({ draws: (p.draws || 0) + 1 }).eq("id", pid);
               }
             }
-            console.log(`[Battle] ✅ Settled & closed: winner=${winnerId}, total=${totalPoints}`);
+            console.log(`[Battle] ✅ Settled & closed: Player A got ${rawA}, Player B got ${rawB}`);
           } catch (err) {
             console.error("[Battle] Point settlement error:", err);
           }
@@ -615,11 +635,10 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     <motion.div animate={shaking ? { x: [0, -8, 8, -6, 6, -3, 3, 0], y: [0, 4, -4, 3, -3, 1, -1, 0] } : {}} transition={{ duration: 1 }} className="flex-1 flex flex-col max-w-7xl w-full mx-auto relative overflow-hidden">
       <AnimatePresence>
         {takeover && (
-          <motion.div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <motion.div className="relative z-10 text-center" initial={{ scale: 0.3, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }}>
-              <motion.p className="text-2xl md:text-3xl font-black mb-2" style={{ color: takeover.color, textShadow: `0 0 20px ${takeover.color}` }} animate={{ scale: [1, 1.05, 1] }} transition={{ repeat: Infinity, duration: 0.8 }}>{takeover.label}</motion.p>
-              <p className="text-sm md:text-base font-bold text-white/90"><span className="text-[#00d1ff]">@{takeover.username}</span> envió</p>
+          <motion.div className="absolute top-[30%] inset-x-0 z-[60] flex items-center justify-center pointer-events-none" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+            <motion.div className="relative z-10 text-center bg-black/40 px-6 py-3 rounded-2xl backdrop-blur-md border border-white/10" initial={{ scale: 0.5 }} animate={{ scale: 1 }} exit={{ scale: 0.8 }}>
+              <motion.p className="text-xl md:text-2xl font-black mb-1" style={{ color: takeover.color, textShadow: `0 0 15px ${takeover.color}` }} animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 0.8 }}>{takeover.label}</motion.p>
+              <p className="text-xs md:text-sm font-bold text-white/90"><span className="text-[#00d1ff]">@{takeover.username}</span></p>
             </motion.div>
           </motion.div>
         )}
@@ -674,10 +693,40 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         connectOptions={{ autoSubscribe: true }}
         video={true}
         audio={true}
-        className="flex flex-col flex-[5] min-h-0"
+        className="flex flex-col flex-[4] min-h-0 relative"
       >
         <RoomWatcher playerA={playerA?.username} playerB={playerB?.username} onBothConnected={setBothConnected} />
         
+        {/* GLOBAL PANORAMIC OVERLAY FOR PREPARING */}
+        <AnimatePresence>
+          {phase === "PREPARING" && (
+            <motion.div 
+              className="absolute inset-0 z-[60] flex flex-col items-center justify-center pointer-events-none bg-black/80 backdrop-blur-sm"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            >
+              <h2 className="text-2xl md:text-5xl font-black text-white tracking-widest mb-6 md:mb-8 animate-pulse text-center w-full" style={{ textShadow: "0 0 20px rgba(255,255,255,0.5)" }}>
+                PREPARANDO BATALLA
+              </h2>
+              <div className="flex items-center justify-center gap-6 md:gap-12 w-full px-4">
+                <div className="flex flex-col items-center">
+                  <img src={playerA?.avatar_url || "https://i.pravatar.cc/150"} className="w-16 h-16 md:w-32 md:h-32 rounded-full border-2 md:border-4 border-[#ff007a] shadow-[0_0_30px_#ff007a80]" />
+                  <span className="mt-2 font-black text-[#ff007a] text-sm md:text-lg">@{playerA?.username || "A"}</span>
+                </div>
+                <div className="text-3xl md:text-6xl font-black text-white italic opacity-80">VS</div>
+                <div className="flex flex-col items-center">
+                  <img src={playerB?.avatar_url || "https://i.pravatar.cc/150"} className="w-16 h-16 md:w-32 md:h-32 rounded-full border-2 md:border-4 border-[#00d1ff] shadow-[0_0_30px_#00d1ff80]" />
+                  <span className="mt-2 font-black text-[#00d1ff] text-sm md:text-lg">@{playerB?.username || "B"}</span>
+                </div>
+              </div>
+              {isCountdown && (
+                <div className="mt-6 md:mt-8 text-5xl md:text-8xl font-black text-white animate-ping" style={{ textShadow: "0 0 30px #fff" }}>
+                  {displayTime}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="grid grid-cols-2 flex-1 relative min-h-0" style={{ gap: 0 }}>
           {mySide !== "Audience" && <LocalControls phase={phase} />}
 
@@ -718,14 +767,6 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                 isCountdown={isCountdown}
               />
             </div>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[1]">
-              {(!playerA?.username || phase === "PREPARING") && (
-                <>
-                  {playerA && <img src={playerA.avatar_url || "https://i.pravatar.cc/150"} className="w-12 h-12 rounded-full mb-2 opacity-50" />}
-                  <span className="text-[#ff007a]/8 font-black text-7xl">A</span>
-                </>
-              )}
-            </div>
             <motion.div className="absolute inset-0 z-[1] pointer-events-none" animate={glowA ? { boxShadow: ["inset 0 0 40px #ff007a40", "inset 0 0 80px #ff007a60", "inset 0 0 40px #ff007a40"] } : {}} />
             <AnimatePresence>
               {tapsA.map(t => (
@@ -746,14 +787,6 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                 isCountdown={isCountdown}
               />
             </div>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[1]">
-              {(!playerB?.username || phase === "PREPARING") && (
-                <>
-                  {playerB && <img src={playerB.avatar_url || "https://i.pravatar.cc/150"} className="w-12 h-12 rounded-full mb-2 opacity-50" />}
-                  <span className="text-[#00d1ff]/8 font-black text-7xl">B</span>
-                </>
-              )}
-            </div>
             <motion.div className="absolute inset-0 z-[1] pointer-events-none" animate={glowB ? { boxShadow: ["inset 0 0 40px #00d1ff40", "inset 0 0 80px #00d1ff60", "inset 0 0 40px #00d1ff40"] } : {}} />
             <AnimatePresence>
               {tapsB.map(t => (
@@ -764,7 +797,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         </div>
       </LiveKitRoom>
 
-      <div className="min-h-[80px] max-h-[140px] bg-black/40 backdrop-blur-xl p-2 flex flex-col border-t border-white/5 relative">
+      <div className="min-h-[120px] max-h-[200px] bg-black/40 backdrop-blur-xl p-2 flex flex-col border-t border-white/5 relative z-40">
         <div className="flex-1 overflow-y-auto space-y-1.5 mb-2 pr-1 flex flex-col">
           {messages.map((msg: any) => {
             const isElite = msg.tier === 3;

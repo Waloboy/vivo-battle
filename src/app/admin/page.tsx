@@ -67,12 +67,29 @@ export default function AdminDashboard() {
   };
 
   const fetchTransactions = async () => {
-    const { data } = await supabase
+    // 1. Obtener todas las transacciones pendientes (sin límite)
+    const { data: pendingData } = await supabase
       .from("transactions")
       .select("*, profiles(username, bank_name, id_card, phone_number)")
+      .in("type", ["DEPOSIT", "deposit", "WITHDRAW", "withdrawal", "DEPOSIT_PENDING"])
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+
+    // 2. Obtener las últimas 100 transacciones resueltas (aprobadas/rechazadas)
+    const { data: resolvedData } = await supabase
+      .from("transactions")
+      .select("*, profiles(username, bank_name, id_card, phone_number)")
+      .in("type", ["DEPOSIT", "deposit", "WITHDRAW", "withdrawal", "DEPOSIT_PENDING"])
+      .neq("status", "pending")
       .order("created_at", { ascending: false })
-      .limit(60);
-    if (data) setTransactions(data);
+      .limit(100);
+
+    const combined = [...(pendingData || []), ...(resolvedData || [])];
+    
+    // Sort all by created_at DESC
+    combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    
+    setTransactions(combined);
   };
 
   const fetchSettlement = async () => {
