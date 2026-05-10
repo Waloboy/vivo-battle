@@ -19,29 +19,13 @@ export async function GET() {
   );
 
   try {
-    // 1. Fetch pending
-    const { data: pendingData, error: pendingError } = await supabaseAdmin
+    const { data: combined, error } = await supabaseAdmin
       .from("transactions")
-      .select("*, profiles(username, bank_name, id_card, phone_number)")
-      .in("type", ["DEPOSIT", "WITHDRAW"])
-      .eq("status", "pending")
-      .order("created_at", { ascending: false });
-
-    if (pendingError) throw pendingError;
-
-    // 2. Fetch resolved (recent 100)
-    const { data: resolvedData, error: resolvedError } = await supabaseAdmin
-      .from("transactions")
-      .select("*, profiles(username, bank_name, id_card, phone_number)")
-      .in("type", ["DEPOSIT", "WITHDRAW"])
-      .neq("status", "pending")
+      .select("*, profiles(username)")
       .order("created_at", { ascending: false })
-      .limit(100);
+      .limit(200);
 
-    if (resolvedError) throw resolvedError;
-
-    const combined = [...(pendingData || []), ...(resolvedData || [])];
-    combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    if (error) throw error;
 
     return NextResponse.json({ data: combined });
   } catch (error: any) {

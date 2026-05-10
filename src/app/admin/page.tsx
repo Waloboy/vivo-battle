@@ -237,26 +237,25 @@ export default function AdminDashboard() {
   const handleApprove = async (txn: any) => {
     setProcessingId(txn.id);
     
-    // 1. Approve the transaction
-    const { error: txErr } = await supabase.from("transactions").update({ 
-      status: "completed", 
-      resolved_at: new Date().toISOString() 
-    }).eq("id", txn.id);
+    try {
+      const res = await fetch("/api/admin/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transaction_id: txn.id,
+          user_id: txn.user_id,
+          amount_credits: txn.amount_credits,
+          action: "approve"
+        })
+      });
 
-    if (txErr) {
-      console.error("Error approving transaction:", txErr);
-      setProcessingId(null);
-      return;
-    }
-
-    // 2. If deposit: add WCR to profile
-    if (txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING") {
-      const { data: prof } = await supabase.from("profiles").select("wallet_credits").eq("id", txn.user_id).single();
-      if (prof) {
-        await supabase.from("profiles").update({
-          wallet_credits: (prof.wallet_credits || 0) + (txn.amount_credits || 0)
-        }).eq("id", txn.user_id);
+      if (!res.ok) {
+        const { error } = await res.json();
+        console.error("Approve failed:", error);
+        alert("Error al aprobar: " + error);
       }
+    } catch (e) {
+      console.error("Approve exception:", e);
     }
 
     setProcessingId(null);
@@ -266,26 +265,25 @@ export default function AdminDashboard() {
   const handleReject = async (txn: any) => {
     setProcessingId(txn.id);
     
-    // 1. Reject the transaction
-    const { error: txErr } = await supabase.from("transactions").update({ 
-      status: "rejected", 
-      resolved_at: new Date().toISOString() 
-    }).eq("id", txn.id);
+    try {
+      const res = await fetch("/api/admin/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transaction_id: txn.id,
+          user_id: txn.user_id,
+          amount_credits: txn.amount_credits,
+          action: "reject"
+        })
+      });
 
-    if (txErr) {
-      console.error("Error rejecting transaction:", txErr);
-      setProcessingId(null);
-      return;
-    }
-
-    // 2. If withdrawal rejected: return BCR to user
-    if (txn.type === "WITHDRAW" || txn.type === "withdrawal") {
-      const { data: prof } = await supabase.from("profiles").select("battle_credits").eq("id", txn.user_id).single();
-      if (prof) {
-        await supabase.from("profiles").update({
-          battle_credits: (prof.battle_credits || 0) + (txn.amount_credits || 0)
-        }).eq("id", txn.user_id);
+      if (!res.ok) {
+        const { error } = await res.json();
+        console.error("Reject failed:", error);
+        alert("Error al rechazar: " + error);
       }
+    } catch (e) {
+      console.error("Reject exception:", e);
     }
 
     setProcessingId(null);
