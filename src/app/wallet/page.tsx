@@ -80,11 +80,17 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
     // REGLA DE ORO: Bs = (CR / 100) * Tasa  =>  CR = Bs / (Tasa / 100)
     const rate = safeTasa / 100;
     const amountCredits = Math.floor(parseFloat(amountBs.replace(",", ".")) / rate);
-    const { error } = await supabase.from("transactions").insert({
+    
+    const payload = {
       user_id: currentUser.id, type: "DEPOSIT",
       amount_bs: parseFloat(amountBs.replace(",", ".")), amount_credits: amountCredits,
       reference_number: refNumber, status: "pending",
-    });
+    };
+    
+    console.log("PAYLOAD RECARGA:", payload);
+    alert("Enviando a BD:\n" + JSON.stringify(payload, null, 2));
+
+    const { error } = await supabase.from("transactions").insert(payload);
     setIsSubmitting(false);
     if (error) { alert("Error: " + error.message); }
     else { setSuccessMsg("Pago reportado. El admin verificará tus créditos pronto."); setAmountBs(""); setRefNumber(""); fetchData(); }
