@@ -84,7 +84,6 @@ export default function AdminDashboard() {
 
   const fetchTransactions = async (isMounted: boolean = true) => {
     if (isMounted) setTransactions([]);
-    alert("Admin buscando TODAS las transacciones sin filtros extra...");
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s Timeout
@@ -96,16 +95,9 @@ export default function AdminDashboard() {
       clearTimeout(timeoutId);
 
       if (!res.ok) {
-        const errText = await res.text();
-        alert("Error de API: " + res.status + " " + errText);
         throw new Error("Failed to fetch transactions API");
       }
       const { data } = await res.json();
-      if (!data || data.length === 0) {
-        alert("La lista de transacciones vino vacía desde la BD.");
-      } else {
-        alert("¡Transacciones encontradas! Cantidad: " + data.length);
-      }
       if (isMounted) setTransactions(data || []);
     } catch (err: any) {
       console.error("fetchTransactions crash:", err);
@@ -247,7 +239,7 @@ export default function AdminDashboard() {
     
     // 1. Approve the transaction
     const { error: txErr } = await supabase.from("transactions").update({ 
-      status: "approved", 
+      status: "completed", 
       resolved_at: new Date().toISOString() 
     }).eq("id", txn.id);
 

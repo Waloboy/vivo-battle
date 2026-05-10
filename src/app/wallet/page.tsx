@@ -86,9 +86,6 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
       amount_bs: parseFloat(amountBs.replace(",", ".")), amount_credits: amountCredits,
       reference_number: refNumber, status: "pending",
     };
-    
-    console.log("PAYLOAD RECARGA:", payload);
-    alert("Enviando a BD:\n" + JSON.stringify(payload, null, 2));
 
     const { error } = await supabase.from("transactions").insert(payload);
     setIsSubmitting(false);
