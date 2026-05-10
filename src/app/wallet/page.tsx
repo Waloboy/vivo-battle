@@ -18,6 +18,7 @@ function balanceFontSize(n: number): string {
 export default function Dashboard() {
   const [isReloadModalOpen, setIsReloadModalOpen] = useState(false);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+  const [isBcrWithdrawModalOpen, setIsBcrWithdrawModalOpen] = useState(false);
   const [balance, setBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,19 +95,20 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
     else { setSuccessMsg("Pago reportado. El admin verificará tus créditos pronto."); setAmountBs(""); setRefNumber(""); fetchData(); }
   };
 
-  const handleWithdrawSubmit = async () => {
+  const handleWithdrawWcrSubmit = async () => {
     if (!withdrawAmount) return;
     const amountCredits = parseInt(withdrawAmount);
-    if (amountCredits > dualBal.battle_credits) { 
-      alert(`Solo puedes retirar de tu Saldo de Batalla (BCR). Tienes ${fmtBCR(dualBal.battle_credits)} disponibles.`); 
+    if (amountCredits > dualBal.wallet_credits) { 
+      alert(`Solo puedes retirar de tu Saldo de Billetera (WCR). Tienes ${fmtWCR(dualBal.wallet_credits)} disponibles.`); 
       return; 
     }
-    if (!profile?.phone_number) { alert("Configura tus datos bancarios en el Perfil."); return; }
+    if (!profile?.phone_number || !profile?.bank_name || !profile?.id_card) { alert("Configura todos tus datos bancarios en el Perfil."); return; }
+    if (!profile?.whatsapp_number || !profile?.email) { alert("Por favor completa tu número de WhatsApp y Correo en tu Perfil."); return; }
+    
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) { alert("Sesión expirada."); return; }
     setIsSubmitting(true);
     
-    // REGLA DE ORO: Bs = (CR / 100) * Tasa
     const rate = safeTasa / 100;
     const grossBsAmount = amountCredits * rate;
     const netBsAmount = grossBsAmount * 0.85; // Descuento 15%
@@ -114,18 +116,50 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
     const { error } = await supabase.from("transactions").insert({
       user_id: currentUser.id, type: "WITHDRAW",
       amount_credits: amountCredits, amount_bs: netBsAmount, status: "pending",
+      bank_name: profile.bank_name,
     });
 
     if (!error) {
-      // Deduct BCR immediately
+      // Deduct WCR immediately
       await supabase.from("profiles").update({
-        battle_credits: Math.max(0, (dualBal.battle_credits || 0) - amountCredits)
+        wallet_credits: Math.max(0, (dualBal.wallet_credits || 0) - amountCredits)
       }).eq("id", currentUser.id);
     }
 
     setIsSubmitting(false);
     if (error) { alert("Error: " + error.message); }
     else { setSuccessMsg("¡Retiro solicitado! En breve el admin procesará tu pago."); setWithdrawAmount(""); fetchData(); }
+  };
+
+  const handleWithdrawBcrSubmit = async () => {
+    if (!withdrawAmount) return;
+    const amountCredits = parseInt(withdrawAmount);
+    if (amountCredits > dualBal.battle_credits) { 
+      alert(`Solo puedes cobrar de tu Saldo de Batalla (BCR). Tienes ${fmtBCR(dualBal.battle_credits)} disponibles.`); 
+      return; 
+    }
+    if (!profile?.phone_number || !profile?.bank_name || !profile?.id_card) { alert("Configura todos tus datos bancarios en el Perfil."); return; }
+    if (!profile?.whatsapp_number || !profile?.email) { alert("Por favor completa tu número de WhatsApp y Correo en tu Perfil."); return; }
+    
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) { alert("Sesión expirada."); return; }
+    setIsSubmitting(true);
+    
+    const rate = safeTasa / 100;
+    const grossBsAmount = amountCredits * rate;
+    const netBsAmount = grossBsAmount * 0.85; // Descuento 15% en BCR también o no?
+    
+    const { error } = await supabase.from("transactions").insert({
+      user_id: currentUser.id, type: "WITHDRAW_BCR",
+      amount_credits: amountCredits, amount_bs: netBsAmount, status: "pending",
+      bank_name: profile.bank_name,
+    });
+
+    // NOTE: BCR are NOT deducted immediately until Admin approves.
+
+    setIsSubmitting(false);
+    if (error) { alert("Error: " + error.message); }
+    else { setSuccessMsg("¡Cobro solicitado! Espera la aprobación del Admin."); setWithdrawAmount(""); fetchData(); }
   };
 
   if (loading) return <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#ff007a]" size={40} /></div>;
@@ -196,13 +230,22 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
             <span className="font-bold text-[#ff007a] text-sm">Recargar</span>
           </button>
           <button
-            onClick={() => { setSuccessMsg(""); setIsWithdrawModalOpen(true); }}
+            onClick={() => { setSuccessMsg(""); setIsWithdrawModalOpen(true); setWithdrawAmount(""); }}
             className="flex-1 cyber-glass rounded-2xl p-4 flex flex-col items-center justify-center gap-2 group hover:bg-white/5 transition-all border-white/10"
           >
             <div className="h-12 w-12 rounded-full bg-white/5 flex items-center justify-center group-hover:scale-110 transition-transform">
               <ArrowUpRight className="text-white" size={24} />
             </div>
-            <span className="font-bold text-white/60 text-sm">Retirar</span>
+            <span className="font-bold text-white/60 text-sm">Retirar (WCR)</span>
+          </button>
+          <button
+            onClick={() => { setSuccessMsg(""); setIsBcrWithdrawModalOpen(true); setWithdrawAmount(""); }}
+            className="flex-1 cyber-glass rounded-2xl p-4 flex flex-col items-center justify-center gap-2 group hover:bg-[#00d1ff]/10 hover:border-[#00d1ff]/50 transition-all duration-300 border-white/10"
+          >
+            <div className="h-12 w-12 rounded-full bg-[#00d1ff]/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Sparkles className="text-[#00d1ff]" size={24} />
+            </div>
+            <span className="font-bold text-[#00d1ff] text-sm text-center">Cobrar Ganancias<br/>(BCR)</span>
           </button>
         </div>
       </div>
@@ -249,12 +292,12 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
               </div>
               <div className={`font-bold text-sm flex-shrink-0 ${
                 txn.type === "GIFT_SENT" || txn.type === "gift" ? "text-[#e056fd]" :
-                txn.type === "WITHDRAW" || txn.type === "withdrawal" ? "text-white/70" : 
+                txn.type === "WITHDRAW" || txn.type === "withdrawal" || txn.type === "WITHDRAW_BCR" ? "text-white/70" : 
                 txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" :
                 "text-[#00d1ff]"
               }`}>
-                {txn.type === "WITHDRAW" || txn.type === "withdrawal" || txn.type === "GIFT_SENT" || txn.type === "gift" ? "-" : "+"}
-                {txn.type.includes("BATTLE") || txn.type === "battle_win" ? fmtBCR(Math.abs(txn.amount_credits)) : fmtWCR(Math.abs(txn.amount_credits))}
+                {txn.type === "WITHDRAW" || txn.type === "withdrawal" || txn.type === "WITHDRAW_BCR" || txn.type === "GIFT_SENT" || txn.type === "gift" ? "-" : "+"}
+                {txn.type.includes("BATTLE") || txn.type === "battle_win" || txn.type === "WITHDRAW_BCR" ? fmtBCR(Math.abs(txn.amount_credits)) : fmtWCR(Math.abs(txn.amount_credits))}
               </div>
             </div>
           ))}
@@ -321,8 +364,8 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
         )}
       </Modal>
 
-      {/* ── Withdraw Modal ── */}
-      <Modal isOpen={isWithdrawModalOpen} onClose={() => setIsWithdrawModalOpen(false)} title="Retirar Ganancias">
+      {/* ── Withdraw WCR Modal ── */}
+      <Modal isOpen={isWithdrawModalOpen} onClose={() => setIsWithdrawModalOpen(false)} title="Retirar WCR">
         {successMsg ? (
           <div className="text-center py-8 space-y-4">
             <CheckCircle2 className="mx-auto text-emerald-500" size={56} />
@@ -332,24 +375,25 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
         ) : (
           <div className="flex flex-col gap-4">
             <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white/60 leading-relaxed">
-              Tus BCR se convertirán a Bs según la tasa BCV actual.
+              Tus WCR se convertirán a Bs según la tasa BCV actual.
             </div>
-            {!profile?.phone_number ? (
+            {(!profile?.phone_number || !profile?.bank_name || !profile?.whatsapp_number || !profile?.email) ? (
               <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-xs">
-                Configura tus datos bancarios en Perfil antes de retirar.
+                Configura todos tus datos bancarios, WhatsApp y correo electrónico en Perfil antes de retirar.
               </div>
             ) : (
               <div className="px-3 py-2 bg-black/30 rounded-xl border border-white/5 text-xs space-y-0.5">
                 <span className="text-white/30 text-[9px] uppercase tracking-wider block">Destino</span>
                 <p className="font-semibold text-white/80">{profile.bank_name}</p>
-                <p className="text-white/50">{profile.id_card} · {profile.phone_number}</p>
+                <p className="text-white/50">{profile.id_card} · Tel: {profile.phone_number}</p>
+                <p className="text-white/50">WA: {profile.whatsapp_number} · {profile.email}</p>
               </div>
             )}
             <div>
-              <label className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">BCR a Retirar</label>
-              <input id="wallet-withdraw-amount" name="wallet-withdraw-amount" type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Ej. 5000"
+              <label className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">WCR a Retirar</label>
+              <input id="wallet-withdraw-amount-wcr" name="wallet-withdraw-amount" type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Ej. 5000"
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors" />
-              <p className="text-[10px] text-white/30 mt-1">Disponible: {fmtBCR(dualBal.battle_credits)}</p>
+              <p className="text-[10px] text-white/30 mt-1">Disponible: {fmtWCR(dualBal.wallet_credits)}</p>
               
               {withdrawAmount && !isNaN(parseInt(withdrawAmount)) && (
                 <div className="mt-2 space-y-1.5 p-2.5 bg-white/5 rounded-xl border border-white/10">
@@ -362,15 +406,71 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
                     <span>-{fmtBs((parseInt(withdrawAmount) * (safeTasa / 100)) * 0.15)}</span>
                   </div>
                   <div className="pt-1.5 border-t border-white/10 flex justify-between font-bold text-xs text-emerald-400">
-                    <span>Neto:</span>
+                    <span>Neto a Recibir:</span>
                     <span>{fmtBs((parseInt(withdrawAmount) * (safeTasa / 100)) * 0.85)}</span>
                   </div>
                 </div>
               )}
             </div>
-            <button onClick={handleWithdrawSubmit} disabled={isSubmitting || !profile?.phone_number}
+            <button onClick={handleWithdrawWcrSubmit} disabled={isSubmitting || !profile?.phone_number || !profile?.whatsapp_number}
               className="w-full py-3 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2">
               {isSubmitting && <Loader2 className="animate-spin" size={14}/>} Solicitar Retiro
+            </button>
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Withdraw BCR Modal ── */}
+      <Modal isOpen={isBcrWithdrawModalOpen} onClose={() => setIsBcrWithdrawModalOpen(false)} title="Cobro de Ganancias (BCR)">
+        {successMsg ? (
+          <div className="text-center py-8 space-y-4">
+            <CheckCircle2 className="mx-auto text-emerald-500" size={56} />
+            <h3 className="text-lg font-bold text-white">{successMsg}</h3>
+            <button onClick={() => setIsBcrWithdrawModalOpen(false)} className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors">Cerrar</button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="bg-[#00d1ff]/5 border border-[#00d1ff]/20 rounded-xl p-3 text-xs text-[#00d1ff] leading-relaxed">
+              Tus BCR se convertirán a Bs según la tasa BCV actual. Los créditos no se descontarán hasta que el administrador apruebe el cobro.
+            </div>
+            {(!profile?.phone_number || !profile?.bank_name || !profile?.whatsapp_number || !profile?.email) ? (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-xs">
+                Configura todos tus datos bancarios, WhatsApp y correo electrónico en Perfil antes de retirar.
+              </div>
+            ) : (
+              <div className="px-3 py-2 bg-black/30 rounded-xl border border-white/5 text-xs space-y-0.5">
+                <span className="text-white/30 text-[9px] uppercase tracking-wider block">Destino</span>
+                <p className="font-semibold text-white/80">{profile.bank_name}</p>
+                <p className="text-white/50">{profile.id_card} · Tel: {profile.phone_number}</p>
+                <p className="text-white/50">WA: {profile.whatsapp_number} · {profile.email}</p>
+              </div>
+            )}
+            <div>
+              <label className="block text-[10px] font-medium text-[#00d1ff]/60 mb-1 uppercase tracking-wider">BCR a Cobrar</label>
+              <input id="wallet-withdraw-amount-bcr" name="wallet-withdraw-amount" type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Ej. 5000"
+                className="w-full bg-black/50 border border-[#00d1ff]/30 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors" />
+              <p className="text-[10px] text-white/30 mt-1">Disponible: {fmtBCR(dualBal.battle_credits)}</p>
+              
+              {withdrawAmount && !isNaN(parseInt(withdrawAmount)) && (
+                <div className="mt-2 space-y-1.5 p-2.5 bg-[#00d1ff]/5 rounded-xl border border-[#00d1ff]/10">
+                  <div className="flex justify-between text-[11px] text-white/50">
+                    <span>Bruto:</span>
+                    <span>{fmtBs(parseInt(withdrawAmount) * (safeTasa / 100))}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-[#ff007a]">
+                    <span>Comisión 15%:</span>
+                    <span>-{fmtBs((parseInt(withdrawAmount) * (safeTasa / 100)) * 0.15)}</span>
+                  </div>
+                  <div className="pt-1.5 border-t border-[#00d1ff]/20 flex justify-between font-bold text-xs text-emerald-400">
+                    <span>Neto a Recibir:</span>
+                    <span>{fmtBs((parseInt(withdrawAmount) * (safeTasa / 100)) * 0.85)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <button onClick={handleWithdrawBcrSubmit} disabled={isSubmitting || !profile?.phone_number || !profile?.whatsapp_number}
+              className="w-full py-3 bg-[#00d1ff]/20 hover:bg-[#00d1ff]/30 disabled:opacity-50 text-[#00d1ff] rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 border border-[#00d1ff]/30">
+              {isSubmitting && <Loader2 className="animate-spin" size={14}/>} Solicitar Cobro de Ganancias
             </button>
           </div>
         )}

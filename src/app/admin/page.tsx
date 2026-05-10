@@ -93,7 +93,7 @@ export default function AdminDashboard() {
       
       let { data, error } = await supabase
         .from('transactions')
-        .select('*, profiles!fk_user(username, bank_name, id_card, phone_number)')
+        .select('*, profiles!fk_user(username, bank_name, id_card, phone_number, whatsapp_number, email)')
         .order('created_at', { ascending: false })
         .limit(200)
         .abortSignal(controller.signal);
@@ -102,7 +102,7 @@ export default function AdminDashboard() {
         console.warn("PGRST201: Intentando con transactions_user_id_fkey...");
         const res2 = await supabase
           .from('transactions')
-          .select('*, profiles!transactions_user_id_fkey(username, bank_name, id_card, phone_number)')
+          .select('*, profiles!transactions_user_id_fkey(username, bank_name, id_card, phone_number, whatsapp_number, email)')
           .order('created_at', { ascending: false })
           .limit(200)
           .abortSignal(controller.signal);
@@ -159,7 +159,7 @@ export default function AdminDashboard() {
       const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const { data: gifts, error } = await supabase
         .from("transactions")
-        .select("user_id, amount_credits, profiles(username, bank_name, id_card, phone_number)")
+        .select("user_id, amount_credits, profiles(username, bank_name, id_card, phone_number, whatsapp_number, email)")
         .in("type", ["gift", "GIFT_SENT"])
         .eq("status", "approved")
         .gte("created_at", weekAgo)
@@ -219,7 +219,7 @@ export default function AdminDashboard() {
       const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const { data: wins, error } = await supabase
         .from("transactions")
-        .select("user_id, amount_credits, opponent_id, battle_id, created_at, reference_number, profiles(username, bank_name, id_card, phone_number)")
+        .select("user_id, amount_credits, opponent_id, battle_id, created_at, reference_number, profiles(username, bank_name, id_card, phone_number, whatsapp_number, email)")
         .in("type", ["battle_win", "BATTLE_WIN"])
         .eq("status", "approved")
         .gte("created_at", weekAgo)
@@ -436,7 +436,7 @@ export default function AdminDashboard() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "text-[#00d1ff]" : txn.type === "gift" || txn.type === "GIFT_SENT" ? "text-[#e056fd]" : txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" : "text-white/50"}`}>
-                        {txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "Recarga" : txn.type === "gift" || txn.type === "GIFT_SENT" ? "Gift" : txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "Batalla" : "Retiro"}
+                        {txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "Recarga" : txn.type === "gift" || txn.type === "GIFT_SENT" ? "Gift" : txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "Batalla" : txn.type === "WITHDRAW_BCR" ? "Cobro BCR" : "Retiro WCR"}
                       </span>
                       <p className="font-semibold text-sm mt-0.5">@{prof?.username || "—"}</p>
                     </div>
@@ -469,8 +469,13 @@ export default function AdminDashboard() {
                     ) : txn.status === "pending" ? (
                       <div className="flex gap-2">
                         {isProc ? <Loader2 className="animate-spin" size={18}/> : (<>
-                          <button onClick={() => handleApprove(txn)} className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20"><CheckCircle2 size={16}/></button>
-                          <button onClick={() => handleReject(txn)} className="p-1.5 bg-red-500/10 text-red-400 rounded-lg border border-red-500/20"><XCircle size={16}/></button>
+                          <button onClick={() => handleApprove(txn)} className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20" title="Aprobar Pago"><CheckCircle2 size={16}/></button>
+                          <button onClick={() => handleReject(txn)} className="p-1.5 bg-red-500/10 text-red-400 rounded-lg border border-red-500/20" title="Rechazar"><XCircle size={16}/></button>
+                          {(txn.type === "WITHDRAW" || txn.type === "WITHDRAW_BCR" || txn.type === "withdrawal") && prof?.whatsapp_number && (
+                            <a href={`https://wa.me/${prof.whatsapp_number.replace(/\D/g, '')}?text=Hola%20${prof.username},%20tu%20solicitud%20de%20retiro%20por%20${fmtBs(parseFloat(txn.amount_bs || 0))}%20ha%20sido%20aprobada%20y%20procesada.`} target="_blank" rel="noreferrer" className="p-1.5 bg-[#25D366]/10 text-[#25D366] rounded-lg border border-[#25D366]/20" title="Notificar Vía WhatsApp">
+                              <CheckCheck size={16}/>
+                            </a>
+                          )}
                         </>)}
                       </div>
                     ) : <span className="text-white/20 text-xs">—</span>}
@@ -501,13 +506,15 @@ export default function AdminDashboard() {
                       <tr key={txn.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                         <td className="px-4 py-3">
                           <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "text-[#00d1ff]" : (txn.type === "gift" || txn.type === "GIFT_SENT" ? "text-[#e056fd]" : (txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" : "text-white/50"))}`}>
-                            {txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "Depósito" : (txn.type === "gift" || txn.type === "GIFT_SENT" ? "Gift" : (txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "Batalla" : "Retiro"))}
+                            {txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "Depósito" : (txn.type === "gift" || txn.type === "GIFT_SENT" ? "Gift" : (txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "Batalla" : txn.type === "WITHDRAW_BCR" ? "Cobro BCR" : "Retiro WCR"))}
                           </span>
                         </td>
                         <td className="px-4 py-3 font-medium text-[#00d1ff]">@{prof?.username || "—"}</td>
                         <td className="px-4 py-3 text-xs text-white/50 space-y-0.5">
                           <p className="font-medium text-white/70">{txn.bank_name || prof?.bank_name || "—"}</p>
-                          <p>{prof?.id_card}</p><p>{prof?.phone_number}</p>
+                          <p>ID: {prof?.id_card}</p><p>Tel: {prof?.phone_number}</p>
+                          <p>WA: {prof?.whatsapp_number || "—"}</p>
+                          <p className="text-[10px]">{prof?.email || "—"}</p>
                         </td>
                         <td className="px-4 py-3 font-mono text-xs">{txn.reference_number || "—"}</td>
                         <td className="px-4 py-3 font-semibold">{fmtBs(parseFloat(txn.amount_bs || 0))}</td>
@@ -522,8 +529,13 @@ export default function AdminDashboard() {
                           ) : txn.status === "pending" ? (
                             <div className="flex items-center justify-end gap-1.5">
                               {isProc ? <Loader2 className="animate-spin" size={18}/> : (<>
-                                <button onClick={() => handleApprove(txn)} className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20"><CheckCircle2 size={15}/></button>
-                                <button onClick={() => handleReject(txn)} className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg border border-red-500/20"><XCircle size={15}/></button>
+                                <button onClick={() => handleApprove(txn)} className="px-2 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20 flex items-center gap-1"><CheckCircle2 size={13}/> Aprobar</button>
+                                <button onClick={() => handleReject(txn)} className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg border border-red-500/20" title="Rechazar"><XCircle size={15}/></button>
+                                {(txn.type === "WITHDRAW" || txn.type === "WITHDRAW_BCR" || txn.type === "withdrawal") && prof?.whatsapp_number && (
+                                  <a href={`https://wa.me/${prof.whatsapp_number.replace(/\D/g, '')}?text=Hola%20${prof.username},%20tu%20solicitud%20de%20retiro%20por%20${fmtBs(parseFloat(txn.amount_bs || 0))}%20ha%20sido%20aprobada%20y%20procesada.`} target="_blank" rel="noreferrer" className="p-1.5 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] rounded-lg border border-[#25D366]/20 flex items-center gap-1" title="Notificar Vía WhatsApp">
+                                    <CheckCheck size={13}/> WA
+                                  </a>
+                                )}
                               </>)}
                             </div>
                           ) : <span className="text-white/20">—</span>}

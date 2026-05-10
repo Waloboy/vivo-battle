@@ -133,7 +133,9 @@ export default function ProfilePage() {
         city: profile.city,
         bank_name: profile.bank_name,
         id_card: profile.id_card,
-        phone_number: profile.phone_number
+        phone_number: profile.phone_number,
+        whatsapp_number: profile.whatsapp_number,
+        email: profile.email
       };
 
       if (profile.username !== originalUsername) {
@@ -534,6 +536,44 @@ export default function ProfilePage() {
                     className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
                     placeholder="0414-1234567"
                     autoComplete="tel"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">WhatsApp</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Phone size={16} className="text-[#25D366]" />
+                  </div>
+                  <input
+                    id="profile-whatsapp"
+                    name="whatsapp_number"
+                    type="text"
+                    value={profile?.whatsapp_number || ""}
+                    onChange={(e) => setProfile({ ...profile, whatsapp_number: e.target.value })}
+                    className="w-full bg-black/40 border border-[#25D366]/20 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#25D366] transition-colors"
+                    placeholder="0414-1234567"
+                    autoComplete="tel"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Correo Electrónico (Zelle/PayPal)</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <FileText size={16} className="text-white/40" />
+                  </div>
+                  <input
+                    id="profile-email"
+                    name="email"
+                    type="email"
+                    value={profile?.email || ""}
+                    onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
+                    placeholder="tucorreo@ejemplo.com"
+                    autoComplete="email"
                   />
                 </div>
               </div>

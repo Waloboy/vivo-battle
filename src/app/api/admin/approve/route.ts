@@ -56,6 +56,17 @@ export async function POST(req: Request) {
         }).eq("id", user_id);
 
         if (updateErr) throw updateErr;
+      } else if (txn && (txn.type === "WITHDRAW_BCR" || txn.type === "withdrawal_bcr")) {
+        // 4. If WITHDRAW_BCR is approved, deduct from battle_credits now.
+        const { data: prof, error: profErr } = await supabaseAdmin.from("profiles").select("battle_credits").eq("id", user_id).single();
+        if (profErr) throw profErr;
+
+        const newBalance = Math.max(0, (prof.battle_credits || 0) - amount_credits);
+        const { error: updateErr } = await supabaseAdmin.from("profiles").update({
+          battle_credits: newBalance
+        }).eq("id", user_id);
+
+        if (updateErr) throw updateErr;
       }
 
       return NextResponse.json({ success: true, message: "Transaction approved" });
@@ -70,12 +81,20 @@ export async function POST(req: Request) {
 
       const { data: txn } = await supabaseAdmin.from("transactions").select("type").eq("id", transaction_id).single();
 
-      // If withdrawal rejected, refund BCR
-      if (txn && (txn.type === "WITHDRAW" || txn.type === "withdrawal")) {
+      // If withdrawal rejected, refund BCR or WCR
+      if (txn && (txn.type === "WITHDRAW_BCR" || txn.type === "withdrawal_bcr")) {
         const { data: prof } = await supabaseAdmin.from("profiles").select("battle_credits").eq("id", user_id).single();
         if (prof) {
           await supabaseAdmin.from("profiles").update({
             battle_credits: (prof.battle_credits || 0) + amount_credits
+          }).eq("id", user_id);
+        }
+      } else if (txn && (txn.type === "WITHDRAW" || txn.type === "withdrawal")) {
+        // Now WCR is deducted immediately, so refund WCR if rejected.
+        const { data: prof } = await supabaseAdmin.from("profiles").select("wallet_credits").eq("id", user_id).single();
+        if (prof) {
+          await supabaseAdmin.from("profiles").update({
+            wallet_credits: (prof.wallet_credits || 0) + amount_credits
           }).eq("id", user_id);
         }
       }
