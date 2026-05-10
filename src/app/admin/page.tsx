@@ -85,19 +85,25 @@ export default function AdminDashboard() {
   const fetchTransactions = async (isMounted: boolean = true) => {
     if (isMounted) setTransactions([]);
     try {
+      const { data: roleData } = await supabase.from("profiles").select("role").eq("id", authUser?.id).single();
+      console.log("User Role:", roleData?.role);
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s Timeout
       
-      const res = await fetch("/api/admin/transactions", { 
-        cache: "no-store",
-        signal: controller.signal 
-      });
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*, profiles(username)')
+        .order('created_at', { ascending: false })
+        .limit(200)
+        .abortSignal(controller.signal);
+
       clearTimeout(timeoutId);
 
-      if (!res.ok) {
-        throw new Error("Failed to fetch transactions API");
+      if (error) {
+        throw error;
       }
-      const { data } = await res.json();
+      
       if (isMounted) setTransactions(data || []);
     } catch (err: any) {
       console.error("fetchTransactions crash:", err);
@@ -111,6 +117,13 @@ export default function AdminDashboard() {
         if (isMounted) setTransactions([]);
       }
     }
+  };
+
+  const forceRefresh = async () => {
+    setTransactions([]);
+    setDataLoading(true);
+    await fetchTransactions(true);
+    setDataLoading(false);
   };
 
   const fetchSettlement = async (isMounted: boolean = true) => {
@@ -359,8 +372,8 @@ export default function AdminDashboard() {
               </button>
             </div>
           )}
-          <button onClick={() => { fetchTransactions(); if (tab === "settlement") fetchSettlement(); }}
-            className="p-2.5 cyber-glass rounded-xl border-white/5 hover:bg-white/10 transition-colors" title="Actualizar">
+          <button onClick={() => { forceRefresh(); if (tab === "settlement") fetchSettlement(); if (tab === "battle_settlement") fetchBcrSettlement(); }}
+            className="p-2.5 cyber-glass rounded-xl border-white/5 hover:bg-white/10 transition-colors" title="Forzar Actualización">
             <RefreshCw size={15}/>
           </button>
         </div>
