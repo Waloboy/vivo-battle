@@ -38,7 +38,12 @@ const fmtTime = (s: number) => {
 // --- LiveKit Video Component ---
 import { useConnectionState, useRoomContext } from '@livekit/components-react';
 
-function RoomWatcher({ playerA, playerB, onBothConnected }: { playerA?: string, playerB?: string, onBothConnected: (ready: boolean) => void }) {
+function RoomWatcher({ playerA, playerB, onBothConnected, onOpponentGhost }: { 
+  playerA?: string, 
+  playerB?: string, 
+  onBothConnected: (ready: boolean) => void,
+  onOpponentGhost: (ghost: boolean) => void
+}) {
   const participants = useParticipants();
   const connectionState = useConnectionState();
 
@@ -49,8 +54,13 @@ function RoomWatcher({ playerA, playerB, onBothConnected }: { playerA?: string, 
     }
     const a = participants.find(p => p.identity === playerA);
     const b = participants.find(p => p.identity === playerB);
-    onBothConnected(!!a && !!b);
-  }, [participants, connectionState, playerA, playerB, onBothConnected]);
+    const both = !!a && !!b;
+    onBothConnected(both);
+    // If one was previously connected and now missing, it's a ghost
+    if (a && !b) onOpponentGhost(true);
+    else if (b && !a) onOpponentGhost(true);
+    else onOpponentGhost(false);
+  }, [participants, connectionState, playerA, playerB, onBothConnected, onOpponentGhost]);
   return null;
 }
 
@@ -62,9 +72,10 @@ interface BattleVideoProps {
   displayTime: number;
   isCountdown: boolean;
   hasStartedBattle: boolean;
+  isOpponentGhost: boolean;
 }
 
-function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, isCountdown, hasStartedBattle }: BattleVideoProps) {
+function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, isCountdown, hasStartedBattle, isOpponentGhost }: BattleVideoProps) {
   const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: false }]);
   const trackRef = tracks.find(t => t.participant.identity === expectedUsername);
   const audioTracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }]);
@@ -74,7 +85,9 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
   const participant = participants.find(p => p.identity === expectedUsername);
   const isMicOn = participant?.isMicrophoneEnabled;
 
-  const isCameraEnabled = phase !== "PREPARING";
+  const isCameraEnabled = hasStartedBattle || phase !== "PREPARING";
+  // Ghost: this video slot's player is missing while battle is live
+  const isGhost = hasStartedBattle && isOpponentGhost && !participant;
 
   // Debug LiveKit connection state
   const connectionState = useConnectionState();
@@ -100,6 +113,16 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
       {isCameraEnabled && (
         <div className="absolute top-4 right-4 z-[20] p-1.5 rounded-full bg-black/40 backdrop-blur border border-white/10">
           {isMicOn ? <Mic size={14} className="text-[#00d1ff]" /> : <MicOff size={14} className="text-red-500" />}
+        </div>
+      )}
+
+      {/* Ghosting overlay — opponent temporarily disconnected */}
+      {isGhost && (
+        <div className="absolute inset-0 z-[25] flex items-end justify-center pb-4 pointer-events-none">
+          <div className="flex items-center gap-1.5 bg-black/70 backdrop-blur-sm border border-yellow-500/40 rounded-full px-3 py-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+            <span className="text-yellow-300 text-[10px] font-bold tracking-wider uppercase">Oponente reconectando...</span>
+          </div>
         </div>
       )}
       
@@ -281,6 +304,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
 
   const [livekitToken, setLivekitToken] = useState("");
   const [bothConnected, setBothConnected] = useState(false);
+  const [isOpponentGhost, setIsOpponentGhost] = useState(false); // opponent temporarily disconnected
   const [hasBroadcastedStart, setHasBroadcastedStart] = useState(false);
   const [hasSettledPoints, setHasSettledPoints] = useState(false);
   // One-way latch: once battle leaves PREPARING, VS screen never comes back
@@ -315,6 +339,9 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     return BATTLE_DURATION - elapsed;
   };
 
+  // Derived: is the battle past the warmup window (>195s elapsed)?
+  const isPastWarmup = (startIso: string) => calculateTimeLeft(startIso) <= 195;
+
   const [wakeCount, setWakeCount] = useState(0);
 
   useEffect(() => {
@@ -325,24 +352,30 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
 
   useEffect(() => {
     let isMounted = true;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    let currentController: AbortController | null = null;
 
     const initBattleData = async () => {
+      if (currentController) currentController.abort(); // Cancel any pending fetch
+      currentController = new AbortController();
+      const signal = currentController.signal;
+      const timeoutId = setTimeout(() => currentController?.abort(), 10000);
+
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
         if (isMounted) setUser(user);
         
-        const { data: p } = await supabase.from("profiles").select("username, bank_name").eq("id", user.id).abortSignal(controller.signal).single();
+        const { data: p } = await supabase.from("profiles").select("username, bank_name").eq("id", user.id).abortSignal(signal).single();
         if (p && isMounted) setProfile(p);
         
         const b = await getWalletCredits(user.id);
         if (isMounted) setBalance(b);
 
-        const { data: battle } = await supabase.from("battles").select("*").eq("id", id).abortSignal(controller.signal).single();
+        const { data: battle } = await supabase.from("battles").select("*").eq("id", id).abortSignal(signal).single();
         if (battle && isMounted) {
           setBattleData(battle);
+
+          // ⭐ POINTS RECOVERY: always load latest scores from DB
           setRawA(battle.score_a || 0);
           setRawB(battle.score_b || 0);
           
@@ -350,24 +383,42 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
           else if (user.id === battle.player_b_id) setMySide("B");
           else setMySide("Audience");
 
-          const { data: profs } = await supabase.from("profiles").select("id, username, avatar_url, bank_name").in("id", [battle.player_a_id, battle.player_b_id]).abortSignal(controller.signal);
+          const { data: profs } = await supabase.from("profiles").select("id, username, avatar_url, bank_name").in("id", [battle.player_a_id, battle.player_b_id]).abortSignal(signal);
           if (profs && isMounted) {
             setPlayerA(profs.find((pr: any) => pr.id === battle.player_a_id));
             setPlayerB(profs.find((pr: any) => pr.id === battle.player_b_id));
           }
 
-          setTimeLeft(calculateTimeLeft(battle.started_at));
+          const tLeft = calculateTimeLeft(battle.started_at);
+          setTimeLeft(tLeft);
+
+          // ⭐ SKIP WARMUP if already past it
+          if (tLeft <= 195) {
+            setBothConnected(true); // Force past the PREPARING gate
+            setHasStartedBattle(true); // Never show VS screen again
+          }
+
+          // ⭐ RESULTS PROTECTION: if battle ended, jump straight to results
+          if (!battle.is_active && tLeft <= 0) {
+            setIsFinishedLocally(true);
+          }
         }
       } catch (err: any) {
         if (err.name === 'AbortError') {
-          console.warn("Battle load timeout, retrying...");
-          if (isMounted) setTimeout(initBattleData, 1000);
+          console.warn("Battle load timeout aborted.");
         }
       } finally {
         clearTimeout(timeoutId);
       }
     };
     initBattleData();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        initBattleData(); // Aggressive refetch on refocus
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     const ch = supabase.channel(`battle-${id}`)
       .on("broadcast", { event: "chat" }, ({ payload }: { payload: any }) => setMessages(p => [...p, payload]))
@@ -387,6 +438,9 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
          setRematchB(false);
          setIsFinishedLocally(false);
          setHasSettledPoints(false);
+         setHasStartedBattle(false); // Allow VS screen for rematch
+         setHasBroadcastedStart(false);
+         setBothConnected(false);
          setTimeLeft(calculateTimeLeft(payload.started_at));
       })
       .on("broadcast", { event: "battle_start" }, ({ payload }: { payload: any }) => {
@@ -402,13 +456,19 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
            setBattleData((prev: any) => ({ ...prev, started_at: payload.new.started_at }));
            setTimeLeft(calculateTimeLeft(payload.new.started_at));
          }
+         // ⭐ POINTS RECOVERY via DB: sync scores when DB is updated
+         if (typeof payload.new.score_a === 'number') setRawA(payload.new.score_a);
+         if (typeof payload.new.score_b === 'number') setRawB(payload.new.score_b);
+         // ⭐ If marked inactive by server, mark as finished
+         if (payload.new.is_active === false) setIsFinishedLocally(true);
       })
       .subscribe();
       
     return () => { 
       isMounted = false;
-      controller.abort();
+      if (currentController) currentController.abort();
       supabase.removeChannel(ch); 
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [id, supabase, router, wakeCount]);
 
@@ -438,9 +498,12 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     return () => clearInterval(syncInterval);
   }, [id, supabase]);
 
-  // Master Timer — anchored to server started_at, re-syncs on tab focus
+  // Master Timer — anchored to server started_at, always ticks (no bothConnected gate)
   useEffect(() => {
-    if (!battleData?.started_at || !bothConnected) return;
+    if (!battleData?.started_at) return;
+    // Immediate sync on mount/reconnect
+    setTimeLeft(calculateTimeLeft(battleData.started_at));
+
     const t = setInterval(() => {
       setTimeLeft(calculateTimeLeft(battleData.started_at));
     }, 1000);
@@ -455,17 +518,19 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       document.removeEventListener("visibilitychange", onFocus);
       window.removeEventListener("focus", onFocus);
     };
-  }, [battleData?.started_at, bothConnected]);
+  }, [battleData?.started_at]);
 
-  // Sync True Start Time
+  // Sync True Start Time — only once per session, player A writes it
   useEffect(() => {
     if (bothConnected && mySide === "A" && !hasBroadcastedStart) {
+       // Only set started_at if it's still in warmup (don't overwrite on reconnect)
+       if (battleData?.started_at && isPastWarmup(battleData.started_at)) return;
        setHasBroadcastedStart(true);
        const newStart = new Date().toISOString();
        supabase.from('battles').update({ started_at: newStart }).eq('id', id).then();
        supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "battle_start", payload: { started_at: newStart } });
     }
-  }, [bothConnected, mySide, hasBroadcastedStart, id]);
+  }, [bothConnected, mySide, hasBroadcastedStart, id, battleData]);
 
   // Finished Logic + Point Settlement
   useEffect(() => {
@@ -774,7 +839,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         audio={true}
         className="flex flex-col flex-[4] min-h-0 relative"
       >
-        <RoomWatcher playerA={playerA?.username} playerB={playerB?.username} onBothConnected={setBothConnected} />
+        <RoomWatcher playerA={playerA?.username} playerB={playerB?.username} onBothConnected={setBothConnected} onOpponentGhost={setIsOpponentGhost} />
         
         {/* GLOBAL PANORAMIC OVERLAY FOR PREPARING — latched, never re-shows */}
         <AnimatePresence>
@@ -845,6 +910,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                 displayTime={displayTime}
                 isCountdown={isCountdown}
                 hasStartedBattle={hasStartedBattle}
+                isOpponentGhost={isOpponentGhost}
               />
             </div>
             <motion.div className="absolute inset-0 z-[1] pointer-events-none" animate={glowA ? { boxShadow: ["inset 0 0 40px #ff007a40", "inset 0 0 80px #ff007a60", "inset 0 0 40px #ff007a40"] } : {}} />
@@ -866,6 +932,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                 displayTime={displayTime}
                 isCountdown={isCountdown}
                 hasStartedBattle={hasStartedBattle}
+                isOpponentGhost={isOpponentGhost}
               />
             </div>
             <motion.div className="absolute inset-0 z-[1] pointer-events-none" animate={glowB ? { boxShadow: ["inset 0 0 40px #00d1ff40", "inset 0 0 80px #00d1ff60", "inset 0 0 40px #00d1ff40"] } : {}} />

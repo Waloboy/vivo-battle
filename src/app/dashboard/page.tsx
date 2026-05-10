@@ -243,18 +243,13 @@ export default function ExploreDashboard() {
 
     // Use abort signal instead of Promise.race to truly cancel hung requests
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout instead of 3s
     
     // add abortSignal to the query execution
     const { data, error } = await query.abortSignal(controller.signal);
     clearTimeout(timeoutId);
 
     if (error) {
-      if (error.name === 'AbortError') {
-        console.warn("Fetch battles timeout, retrying...");
-        setTimeout(() => fetchBattles(page, tab, append), 1000);
-        return;
-      }
       console.error("Error fetching battles:", error);
       if (!append) setBattles([]); 
       setLoading(false);

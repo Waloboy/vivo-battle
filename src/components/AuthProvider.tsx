@@ -105,8 +105,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshAuth();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       authListener.subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [supabase, refreshAuth, fetchProfile]);
 
