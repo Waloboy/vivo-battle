@@ -91,12 +91,36 @@ export default function AdminDashboard() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s Timeout
       
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('transactions')
-        .select('*, profiles(username)')
+        .select('*, profiles!fk_user(username)')
         .order('created_at', { ascending: false })
         .limit(200)
         .abortSignal(controller.signal);
+
+      if (error && error.code === 'PGRST201') {
+        console.warn("PGRST201: Intentando con transactions_user_id_fkey...");
+        const res2 = await supabase
+          .from('transactions')
+          .select('*, profiles!transactions_user_id_fkey(username)')
+          .order('created_at', { ascending: false })
+          .limit(200)
+          .abortSignal(controller.signal);
+        data = res2.data;
+        error = res2.error;
+      }
+
+      if (error && error.code === 'PGRST201') {
+        console.warn("PGRST201: Fallback de seguridad a select('*') sin profiles...");
+        const res3 = await supabase
+          .from('transactions')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(200)
+          .abortSignal(controller.signal);
+        data = res3.data;
+        error = res3.error;
+      }
 
       clearTimeout(timeoutId);
 
