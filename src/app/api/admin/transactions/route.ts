@@ -24,7 +24,7 @@ export async function GET() {
       .from("transactions")
       .select("*, profiles(username, bank_name, id_card, phone_number)")
       .in("type", ["DEPOSIT", "WITHDRAW"])
-      .in("status", ["pending", "PENDING"])
+      .eq("status", "pending")
       .order("created_at", { ascending: false });
 
     if (pendingError) throw pendingError;
@@ -34,7 +34,7 @@ export async function GET() {
       .from("transactions")
       .select("*, profiles(username, bank_name, id_card, phone_number)")
       .in("type", ["DEPOSIT", "WITHDRAW"])
-      .not("status", "in", '("pending", "PENDING")')
+      .neq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(100);
 
