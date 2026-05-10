@@ -61,9 +61,10 @@ interface BattleVideoProps {
   playerB: Profile | null;
   displayTime: number;
   isCountdown: boolean;
+  hasStartedBattle: boolean;
 }
 
-function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, isCountdown }: BattleVideoProps) {
+function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, isCountdown, hasStartedBattle }: BattleVideoProps) {
   const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: false }]);
   const trackRef = tracks.find(t => t.participant.identity === expectedUsername);
   const audioTracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }]);
@@ -102,7 +103,8 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
         </div>
       )}
       
-      {phase === "PREPARING" && (
+      {/* VS Overlay — shown only during warmup, never again after battle starts */}
+      {!hasStartedBattle && phase === "PREPARING" && (
         <div className="absolute inset-0 bg-black/80 backdrop-blur-[4px] flex flex-col items-center justify-center z-[10]">
           {/* Waiting for connection overlay inside PREPARING if not bothConnected */}
           {!playerA?.username || !playerB?.username ? (
@@ -157,9 +159,9 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
         </div>
       )}
 
-      {/* Giant Countdown (Last 10s of Prep) */}
+      {/* Giant Countdown (Last 10s of Prep) — only while not yet started */}
       <AnimatePresence>
-        {isCountdown && (
+        {!hasStartedBattle && isCountdown && (
           <motion.div 
             key={displayTime}
             initial={{ scale: 2, opacity: 0 }}
@@ -281,6 +283,8 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const [bothConnected, setBothConnected] = useState(false);
   const [hasBroadcastedStart, setHasBroadcastedStart] = useState(false);
   const [hasSettledPoints, setHasSettledPoints] = useState(false);
+  // One-way latch: once battle leaves PREPARING, VS screen never comes back
+  const [hasStartedBattle, setHasStartedBattle] = useState(false);
 
   // Batching logic for performance
   const pendingScoreA = useRef(0);
@@ -297,6 +301,13 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
 
   const isUrgent = phase === "BATTLE" && displayTime <= 30;
   const isCountdown = phase === "PREPARING" && displayTime <= 10;
+
+  // Latch: once battle starts, VS overlay is permanently dismissed
+  useEffect(() => {
+    if (phase !== "PREPARING" && !hasStartedBattle) {
+      setHasStartedBattle(true);
+    }
+  }, [phase, hasStartedBattle]);
 
   const calculateTimeLeft = (startIso: string) => {
     const start = new Date(startIso).getTime();
@@ -765,9 +776,9 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       >
         <RoomWatcher playerA={playerA?.username} playerB={playerB?.username} onBothConnected={setBothConnected} />
         
-        {/* GLOBAL PANORAMIC OVERLAY FOR PREPARING */}
+        {/* GLOBAL PANORAMIC OVERLAY FOR PREPARING — latched, never re-shows */}
         <AnimatePresence>
-          {phase === "PREPARING" && (
+          {!hasStartedBattle && phase === "PREPARING" && (
             <motion.div 
               className="absolute inset-0 z-[60] flex flex-col items-center justify-center pointer-events-none bg-black/80 backdrop-blur-sm"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -833,6 +844,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                 playerB={playerB}
                 displayTime={displayTime}
                 isCountdown={isCountdown}
+                hasStartedBattle={hasStartedBattle}
               />
             </div>
             <motion.div className="absolute inset-0 z-[1] pointer-events-none" animate={glowA ? { boxShadow: ["inset 0 0 40px #ff007a40", "inset 0 0 80px #ff007a60", "inset 0 0 40px #ff007a40"] } : {}} />
@@ -853,6 +865,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                 playerB={playerB}
                 displayTime={displayTime}
                 isCountdown={isCountdown}
+                hasStartedBattle={hasStartedBattle}
               />
             </div>
             <motion.div className="absolute inset-0 z-[1] pointer-events-none" animate={glowB ? { boxShadow: ["inset 0 0 40px #00d1ff40", "inset 0 0 80px #00d1ff60", "inset 0 0 40px #00d1ff40"] } : {}} />
