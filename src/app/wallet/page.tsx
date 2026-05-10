@@ -83,7 +83,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
     const { error } = await supabase.from("transactions").insert({
       user_id: currentUser.id, type: "DEPOSIT",
       amount_bs: parseFloat(amountBs.replace(",", ".")), amount_credits: amountCredits,
-      reference_number: refNumber, status: "pending",
+      reference_number: refNumber, status: "PENDING",
     });
     setIsSubmitting(false);
     if (error) { alert("Error: " + error.message); }
@@ -109,7 +109,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
     
     const { error } = await supabase.from("transactions").insert({
       user_id: currentUser.id, type: "WITHDRAW",
-      amount_credits: amountCredits, amount_bs: netBsAmount, status: "pending",
+      amount_credits: amountCredits, amount_bs: netBsAmount, status: "PENDING",
     });
 
     if (!error) {

@@ -83,6 +83,7 @@ export default function AdminDashboard() {
   };
 
   const fetchTransactions = async (isMounted: boolean = true) => {
+    if (isMounted) setTransactions([]);
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s Timeout

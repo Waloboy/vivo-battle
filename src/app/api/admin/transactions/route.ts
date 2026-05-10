@@ -23,8 +23,8 @@ export async function GET() {
     const { data: pendingData, error: pendingError } = await supabaseAdmin
       .from("transactions")
       .select("*, profiles(username, bank_name, id_card, phone_number)")
-      .in("type", ["DEPOSIT", "deposit", "WITHDRAW", "withdrawal", "DEPOSIT_PENDING"])
-      .eq("status", "pending")
+      .in("type", ["DEPOSIT", "WITHDRAW"])
+      .in("status", ["pending", "PENDING"])
       .order("created_at", { ascending: false });
 
     if (pendingError) throw pendingError;
@@ -33,8 +33,8 @@ export async function GET() {
     const { data: resolvedData, error: resolvedError } = await supabaseAdmin
       .from("transactions")
       .select("*, profiles(username, bank_name, id_card, phone_number)")
-      .in("type", ["DEPOSIT", "deposit", "WITHDRAW", "withdrawal", "DEPOSIT_PENDING"])
-      .neq("status", "pending")
+      .in("type", ["DEPOSIT", "WITHDRAW"])
+      .not("status", "in", '("pending", "PENDING")')
       .order("created_at", { ascending: false })
       .limit(100);
 
