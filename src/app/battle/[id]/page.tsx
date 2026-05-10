@@ -14,7 +14,7 @@ import { useAnimatedCount } from "../useAnimatedCount";
 import { getUserBalance, getWalletCredits } from "@/utils/balance";
 import { fmtWCR, fmtBCR } from "@/utils/format";
 
-import { LiveKitRoom, VideoTrack, useTracks, useLocalParticipant, useParticipants } from '@livekit/components-react';
+import { LiveKitRoom, VideoTrack, AudioTrack, useTracks, useLocalParticipant, useParticipants } from '@livekit/components-react';
 import { Track } from 'livekit-client';
 import '@livekit/components-styles';
 
@@ -66,6 +66,13 @@ interface BattleVideoProps {
 function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, isCountdown }: BattleVideoProps) {
   const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: false }]);
   const trackRef = tracks.find(t => t.participant.identity === expectedUsername);
+  const audioTracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }]);
+  const audioTrackRef = audioTracks.find(t => t.participant.identity === expectedUsername);
+  
+  const participants = useParticipants();
+  const participant = participants.find(p => p.identity === expectedUsername);
+  const isMicOn = participant?.isMicrophoneEnabled;
+
   const isCameraEnabled = phase !== "PREPARING";
 
   // Debug LiveKit connection state
@@ -81,6 +88,17 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
       ) : (
         <div className="w-full h-full bg-[#0d0008] flex items-center justify-center">
           <span className="text-white/30 text-xs">Esperando cámara...</span>
+        </div>
+      )}
+      
+      {audioTrackRef && isCameraEnabled && (
+        <AudioTrack trackRef={audioTrackRef as any} />
+      )}
+
+      {/* Mic Status Indicator */}
+      {isCameraEnabled && (
+        <div className="absolute top-4 right-4 z-[20] p-1.5 rounded-full bg-black/40 backdrop-blur border border-white/10">
+          {isMicOn ? <Mic size={14} className="text-[#00d1ff]" /> : <MicOff size={14} className="text-red-500" />}
         </div>
       )}
       
@@ -285,37 +303,59 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     return BATTLE_DURATION - elapsed;
   };
 
+  const [wakeCount, setWakeCount] = useState(0);
+
   useEffect(() => {
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      setUser(user);
-      
-      const { data: p } = await supabase.from("profiles").select("username").eq("id", user.id).single();
-      if (p) setProfile(p);
-      
-      const b = await getUserBalance(user.id);
-      setBalance(b);
+    const onWake = () => setWakeCount(c => c + 1);
+    window.addEventListener("vivo_wakeup", onWake);
+    return () => window.removeEventListener("vivo_wakeup", onWake);
+  }, []);
 
-      const { data: battle } = await supabase.from("battles").select("*").eq("id", id).single();
-      if (battle) {
-        setBattleData(battle);
-        setRawA(battle.score_a || 0);
-        setRawB(battle.score_b || 0);
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const initBattleData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        if (isMounted) setUser(user);
         
-        if (user.id === battle.player_a_id) setMySide("A");
-        else if (user.id === battle.player_b_id) setMySide("B");
-        else setMySide("Audience");
+        const { data: p } = await supabase.from("profiles").select("username").eq("id", user.id).abortSignal(controller.signal).single();
+        if (p && isMounted) setProfile(p);
+        
+        const b = await getUserBalance(user.id);
+        if (isMounted) setBalance(b);
 
-        const { data: profs } = await supabase.from("profiles").select("id, username, avatar_url").in("id", [battle.player_a_id, battle.player_b_id]);
-        if (profs) {
-          setPlayerA(profs.find((pr: any) => pr.id === battle.player_a_id));
-          setPlayerB(profs.find((pr: any) => pr.id === battle.player_b_id));
+        const { data: battle } = await supabase.from("battles").select("*").eq("id", id).abortSignal(controller.signal).single();
+        if (battle && isMounted) {
+          setBattleData(battle);
+          setRawA(battle.score_a || 0);
+          setRawB(battle.score_b || 0);
+          
+          if (user.id === battle.player_a_id) setMySide("A");
+          else if (user.id === battle.player_b_id) setMySide("B");
+          else setMySide("Audience");
+
+          const { data: profs } = await supabase.from("profiles").select("id, username, avatar_url").in("id", [battle.player_a_id, battle.player_b_id]).abortSignal(controller.signal);
+          if (profs && isMounted) {
+            setPlayerA(profs.find((pr: any) => pr.id === battle.player_a_id));
+            setPlayerB(profs.find((pr: any) => pr.id === battle.player_b_id));
+          }
+
+          setTimeLeft(calculateTimeLeft(battle.started_at));
         }
-
-        setTimeLeft(calculateTimeLeft(battle.started_at));
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          console.warn("Battle load timeout, retrying...");
+          if (isMounted) setTimeout(initBattleData, 1000);
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
-    })();
+    };
+    initBattleData();
 
     const ch = supabase.channel(`battle-${id}`)
       .on("broadcast", { event: "chat" }, ({ payload }: { payload: any }) => setMessages(p => [...p, payload]))
@@ -353,8 +393,12 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       })
       .subscribe();
       
-    return () => { supabase.removeChannel(ch); };
-  }, [id, supabase, router]);
+    return () => { 
+      isMounted = false;
+      controller.abort();
+      supabase.removeChannel(ch); 
+    };
+  }, [id, supabase, router, wakeCount]);
 
   // Generate LiveKit Token
   useEffect(() => {

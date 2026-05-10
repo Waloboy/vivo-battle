@@ -13,64 +13,96 @@ export default function RankingPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [myRank, setMyRank] = useState<number | null>(null);
   const [myProfile, setMyProfile] = useState<any>(null);
+  const [wakeCount, setWakeCount] = useState(0);
 
   useEffect(() => {
-    (async () => {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) setCurrentUserId(user.id);
+    const onWake = () => setWakeCount(c => c + 1);
+    window.addEventListener("vivo_wakeup", onWake);
+    return () => window.removeEventListener("vivo_wakeup", onWake);
+  }, []);
 
-      // Fetch top 100 users ordered by total_earned (historical accumulated score)
-      let { data, error } = await supabase
-        .from("profiles")
-        .select("id, username, avatar_url, total_earned, wins, losses, draws")
-        .order("total_earned", { ascending: false, nullsFirst: false })
-        .limit(100);
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-      // Fallback: if no one has total_earned, show users by creation date
-      if (!error && (!data || data.length === 0 || data.every((u: any) => !u.total_earned || u.total_earned === 0))) {
-        const fallback = await supabase
+    const fetchRanking = async () => {
+      try {
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && isMounted) setCurrentUserId(user.id);
+
+        // Fetch top 100 users ordered by total_earned (historical accumulated score)
+        let { data, error } = await supabase
           .from("profiles")
           .select("id, username, avatar_url, total_earned, wins, losses, draws")
-          .order("created_at", { ascending: false })
-          .limit(100);
-        if (!fallback.error && fallback.data) {
-          data = fallback.data;
-          error = fallback.error;
-        }
-      }
+          .order("total_earned", { ascending: false, nullsFirst: false })
+          .limit(100)
+          .abortSignal(controller.signal);
 
-      if (!error && data) {
-        setUsers(data);
-        
-        // Find the current user's rank
-        if (user) {
-          const userIndex = data.findIndex((u: any) => u.id === user.id);
-          if (userIndex >= 0) {
-            setMyRank(userIndex + 1);
-            setMyProfile(data[userIndex]);
-          } else {
-            // User not in top 100 — calculate their actual rank
-            const { data: myData } = await supabase
-              .from("profiles")
-              .select("id, username, avatar_url, total_earned, wins, losses, draws")
-              .eq("id", user.id)
-              .single();
+        // Fallback: if no one has total_earned, show users by creation date
+        if (!error && (!data || data.length === 0 || data.every((u: any) => !u.total_earned || u.total_earned === 0))) {
+          const fallback = await supabase
+            .from("profiles")
+            .select("id, username, avatar_url, total_earned, wins, losses, draws")
+            .order("created_at", { ascending: false })
+            .limit(100)
+            .abortSignal(controller.signal);
             
-            if (myData) {
-              setMyProfile(myData);
-              const { count } = await supabase
+          if (!fallback.error && fallback.data) {
+            data = fallback.data;
+            error = fallback.error;
+          }
+        }
+
+        if (!error && data && isMounted) {
+          setUsers(data);
+          
+          // Find the current user's rank
+          if (user) {
+            const userIndex = data.findIndex((u: any) => u.id === user.id);
+            if (userIndex >= 0) {
+              setMyRank(userIndex + 1);
+              setMyProfile(data[userIndex]);
+            } else {
+              // User not in top 100 — calculate their actual rank
+              const { data: myData } = await supabase
                 .from("profiles")
-                .select("id", { count: "exact", head: true })
-                .gt("total_earned", myData.total_earned || 0);
-              setMyRank((count || 0) + 1);
+                .select("id, username, avatar_url, total_earned, wins, losses, draws")
+                .eq("id", user.id)
+                .abortSignal(controller.signal)
+                .single();
+              
+              if (myData && isMounted) {
+                setMyProfile(myData);
+                const { count } = await supabase
+                  .from("profiles")
+                  .select("id", { count: "exact", head: true })
+                  .gt("total_earned", myData.total_earned || 0)
+                  .abortSignal(controller.signal);
+                if (isMounted) setMyRank((count || 0) + 1);
+              }
             }
           }
         }
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          console.warn("Ranking timeout, retrying...");
+          if (isMounted) setTimeout(fetchRanking, 1000);
+        }
+      } finally {
+        clearTimeout(timeoutId);
+        if (isMounted) setLoading(false);
       }
-      setLoading(false);
-    })();
-  }, [supabase]);
+    };
+    
+    fetchRanking();
+
+    return () => { 
+      isMounted = false;
+      controller.abort(); 
+    };
+  }, [supabase, wakeCount]);
 
   const getMedalColor = (index: number) => {
     if (index === 0) return "#ffd700"; // Oro

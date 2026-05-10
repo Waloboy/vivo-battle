@@ -54,114 +54,169 @@ export default function AdminDashboard() {
   const [bcrBattles, setBcrBattles] = useState<any[]>([]);
   const [bcvRate, setBcvRate] = useState<number | null>(null);
 
+  const [wakeCount, setWakeCount] = useState(0);
+
+  useEffect(() => {
+    const onWake = () => setWakeCount(c => c + 1);
+    window.addEventListener("vivo_wakeup", onWake);
+    return () => window.removeEventListener("vivo_wakeup", onWake);
+  }, []);
+
   useEffect(() => {
     if (!authUser || !isAdmin) return;
-    initAdmin();
-  }, [authUser, isAdmin]);
+    let isMounted = true;
+    initAdmin(isMounted);
+    return () => { isMounted = false; };
+  }, [authUser, isAdmin, wakeCount]);
 
-  const initAdmin = async () => {
-    const { data: rateRow } = await supabase.from("app_config").select("value").eq("key", "bcv_rate").single();
-    if (rateRow?.value) { const r = parseFloat(rateRow.value); setBcvRate(r); setExchangeRate(r); }
-    await fetchTransactions();
-    setDataLoading(false);
+  const initAdmin = async (isMounted: boolean) => {
+    setDataLoading(true);
+    try {
+      const { data: rateRow } = await supabase.from("app_config").select("value").eq("key", "bcv_rate").single();
+      if (rateRow?.value && isMounted) { const r = parseFloat(rateRow.value); setBcvRate(r); setExchangeRate(r); }
+      await fetchTransactions(isMounted);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      if (isMounted) setDataLoading(false);
+    }
   };
 
-  const fetchTransactions = async () => {
-    // 1. Obtener todas las transacciones pendientes (sin límite)
-    const { data: pendingData } = await supabase
-      .from("transactions")
-      .select("*, profiles(username, bank_name, id_card, phone_number)")
-      .in("type", ["DEPOSIT", "deposit", "WITHDRAW", "withdrawal", "DEPOSIT_PENDING"])
-      .eq("status", "pending")
-      .order("created_at", { ascending: false });
+  const fetchTransactions = async (isMounted: boolean = true) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s Timeout
+      
+      const res = await fetch("/api/admin/transactions", { 
+        cache: "no-store",
+        signal: controller.signal 
+      });
+      clearTimeout(timeoutId);
 
-    // 2. Obtener las últimas 100 transacciones resueltas (aprobadas/rechazadas)
-    const { data: resolvedData } = await supabase
-      .from("transactions")
-      .select("*, profiles(username, bank_name, id_card, phone_number)")
-      .in("type", ["DEPOSIT", "deposit", "WITHDRAW", "withdrawal", "DEPOSIT_PENDING"])
-      .neq("status", "pending")
-      .order("created_at", { ascending: false })
-      .limit(100);
-
-    const combined = [...(pendingData || []), ...(resolvedData || [])];
-    
-    // Sort all by created_at DESC
-    combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    
-    setTransactions(combined);
+      if (!res.ok) throw new Error("Failed to fetch transactions API");
+      const { data } = await res.json();
+      if (isMounted) setTransactions(data || []);
+    } catch (err: any) {
+      console.error("fetchTransactions crash:", err);
+      if (err.name === 'AbortError') {
+        console.warn("Retrying fetch due to timeout...");
+        if (isMounted) {
+          // Reintentar una vez si hay timeout
+          setTimeout(() => fetchTransactions(isMounted), 1000);
+        }
+      } else {
+        if (isMounted) setTransactions([]);
+      }
+    }
   };
 
-  const fetchSettlement = async () => {
+  const fetchSettlement = async (isMounted: boolean = true) => {
     setSettLoading(true);
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: gifts } = await supabase
-      .from("transactions")
-      .select("user_id, amount_credits, profiles(username, bank_name, id_card, phone_number)")
-      .in("type", ["gift", "GIFT_SENT"])
-      .eq("status", "approved")
-      .gte("created_at", weekAgo);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: gifts, error } = await supabase
+        .from("transactions")
+        .select("user_id, amount_credits, profiles(username, bank_name, id_card, phone_number)")
+        .in("type", ["gift", "GIFT_SENT"])
+        .eq("status", "approved")
+        .gte("created_at", weekAgo)
+        .abortSignal(controller.signal);
+      
+      clearTimeout(timeoutId);
 
-    if (!gifts) { setSettLoading(false); return; }
+      if (error) throw error;
+      if (!gifts) { if (isMounted) setSettLoading(false); return; }
 
-    const map = new Map<string, SettlementRow>();
-    for (const g of gifts) {
-      const p = g.profiles as any;
-      if (!map.has(g.user_id)) {
-        map.set(g.user_id, {
-          user_id: g.user_id, username: p?.username || "—",
-          bank_name: p?.bank_name || null, id_card: p?.id_card || null, phone_number: p?.phone_number || null,
-          total_cr: 0, user_share_cr: 0, app_share_cr: 0, user_payout_bs: 0,
-          paid: false, expanded: false,
-        });
+      const map = new Map<string, SettlementRow>();
+      for (const g of gifts) {
+        const p = g.profiles as any;
+        if (!map.has(g.user_id)) {
+          map.set(g.user_id, {
+            user_id: g.user_id, username: p?.username || "—",
+            bank_name: p?.bank_name || null, id_card: p?.id_card || null, phone_number: p?.phone_number || null,
+            total_cr: 0, user_share_cr: 0, app_share_cr: 0, user_payout_bs: 0,
+            paid: false, expanded: false,
+          });
+        }
+        map.get(g.user_id)!.total_cr += g.amount_credits;
       }
-      map.get(g.user_id)!.total_cr += g.amount_credits;
+      for (const row of map.values()) {
+        row.user_share_cr = Math.floor(row.total_cr * 0.6);
+        row.app_share_cr = row.total_cr - row.user_share_cr;
+        row.user_payout_bs = crToBs(row.user_share_cr, bcvRate || exchangeRate);
+      }
+      if (isMounted) setSettlement(Array.from(map.values()).sort((a, b) => b.total_cr - a.total_cr));
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+         if (isMounted) setTimeout(() => fetchSettlement(isMounted), 1000);
+      }
+    } finally {
+      if (isMounted) setSettLoading(false);
     }
-    for (const row of map.values()) {
-      row.user_share_cr = Math.floor(row.total_cr * 0.6);
-      row.app_share_cr = row.total_cr - row.user_share_cr;
-      row.user_payout_bs = crToBs(row.user_share_cr, bcvRate || exchangeRate);
-    }
-    setSettlement(Array.from(map.values()).sort((a, b) => b.total_cr - a.total_cr));
-    setSettLoading(false);
   };
 
-  useEffect(() => { if (tab === "settlement") fetchSettlement(); }, [tab, exchangeRate]);
-  useEffect(() => { if (tab === "battle_settlement") fetchBcrSettlement(); }, [tab, exchangeRate]);
+  useEffect(() => { 
+    let isMounted = true;
+    if (tab === "settlement") fetchSettlement(isMounted); 
+    return () => { isMounted = false; };
+  }, [tab, exchangeRate, wakeCount]);
+  
+  useEffect(() => { 
+    let isMounted = true;
+    if (tab === "battle_settlement") fetchBcrSettlement(isMounted); 
+    return () => { isMounted = false; };
+  }, [tab, exchangeRate, wakeCount]);
 
-  const fetchBcrSettlement = async () => {
+  const fetchBcrSettlement = async (isMounted: boolean = true) => {
     setBcrLoading(true);
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: wins } = await supabase
-      .from("transactions")
-      .select("user_id, amount_credits, opponent_id, battle_id, created_at, reference_number, profiles(username, bank_name, id_card, phone_number)")
-      .in("type", ["battle_win", "BATTLE_WIN"])
-      .eq("status", "approved")
-      .gte("created_at", weekAgo);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-    if (!wins) { setBcrLoading(false); return; }
-    setBcrBattles(wins);
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: wins, error } = await supabase
+        .from("transactions")
+        .select("user_id, amount_credits, opponent_id, battle_id, created_at, reference_number, profiles(username, bank_name, id_card, phone_number)")
+        .in("type", ["battle_win", "BATTLE_WIN"])
+        .eq("status", "approved")
+        .gte("created_at", weekAgo)
+        .abortSignal(controller.signal);
 
-    const map = new Map<string, SettlementRow>();
-    for (const w of wins) {
-      const p = w.profiles as any;
-      if (!map.has(w.user_id)) {
-        map.set(w.user_id, {
-          user_id: w.user_id, username: p?.username || "—",
-          bank_name: p?.bank_name || null, id_card: p?.id_card || null, phone_number: p?.phone_number || null,
-          total_cr: 0, user_share_cr: 0, app_share_cr: 0, user_payout_bs: 0,
-          paid: false, expanded: false,
-        });
+      clearTimeout(timeoutId);
+
+      if (error) throw error;
+      if (!wins) { if (isMounted) setBcrLoading(false); return; }
+      if (isMounted) setBcrBattles(wins);
+
+      const map = new Map<string, SettlementRow>();
+      for (const w of wins) {
+        const p = w.profiles as any;
+        if (!map.has(w.user_id)) {
+          map.set(w.user_id, {
+            user_id: w.user_id, username: p?.username || "—",
+            bank_name: p?.bank_name || null, id_card: p?.id_card || null, phone_number: p?.phone_number || null,
+            total_cr: 0, user_share_cr: 0, app_share_cr: 0, user_payout_bs: 0,
+            paid: false, expanded: false,
+          });
+        }
+        map.get(w.user_id)!.total_cr += w.amount_credits;
       }
-      map.get(w.user_id)!.total_cr += w.amount_credits;
+      for (const row of map.values()) {
+        row.user_share_cr = Math.floor(row.total_cr * 0.6);
+        row.app_share_cr = row.total_cr - row.user_share_cr;
+        row.user_payout_bs = crToBs(row.user_share_cr, bcvRate || exchangeRate);
+      }
+      if (isMounted) setBcrSettlement(Array.from(map.values()).sort((a, b) => b.total_cr - a.total_cr));
+    } catch (err: any) {
+       if (err.name === 'AbortError') {
+          if (isMounted) setTimeout(() => fetchBcrSettlement(isMounted), 1000);
+       }
+    } finally {
+      if (isMounted) setBcrLoading(false);
     }
-    for (const row of map.values()) {
-      row.user_share_cr = Math.floor(row.total_cr * 0.6);
-      row.app_share_cr = row.total_cr - row.user_share_cr;
-      row.user_payout_bs = crToBs(row.user_share_cr, bcvRate || exchangeRate);
-    }
-    setBcrSettlement(Array.from(map.values()).sort((a, b) => b.total_cr - a.total_cr));
-    setBcrLoading(false);
   };
 
   const toggleExpanded = (userId: string) =>

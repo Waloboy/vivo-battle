@@ -85,6 +85,13 @@ export default function ExploreDashboard() {
   const [challengeSending, setChallengeSending] = useState<string | null>(null);
   const [challengeSent, setChallengeSent] = useState<Set<string>>(new Set());
   const [matchmaking, setMatchmaking] = useState(false);
+  const [wakeCount, setWakeCount] = useState(0);
+
+  useEffect(() => {
+    const onWake = () => setWakeCount(c => c + 1);
+    window.addEventListener("vivo_wakeup", onWake);
+    return () => window.removeEventListener("vivo_wakeup", onWake);
+  }, []);
 
   // ── Realtime subscription for live updates (PRIORITY) ──
   useEffect(() => {
@@ -139,7 +146,7 @@ export default function ExploreDashboard() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [supabase]);
+  }, [supabase, wakeCount]);
 
   // ── Initialize user & follows ──
   useEffect(() => {
@@ -234,18 +241,22 @@ export default function ExploreDashboard() {
         .range(from, to);
     }
 
-    // Anti-hang timeout (3 seconds)
-    const timeoutPromise = new Promise<{data: any, error: any}>((resolve) => 
-      setTimeout(() => resolve({ data: null, error: new Error("TIMEOUT") }), 3000)
-    );
-
-    const { data, error } = await Promise.race([query, timeoutPromise]) as {data: any, error: any};
+    // Use abort signal instead of Promise.race to truly cancel hung requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    // add abortSignal to the query execution
+    const { data, error } = await query.abortSignal(controller.signal);
+    clearTimeout(timeoutId);
 
     if (error) {
-      console.error("Error fetching battles:", error);
-      if (error.message === "TIMEOUT" && !append) {
-        setBattles([]); // Fallback to empty state
+      if (error.name === 'AbortError') {
+        console.warn("Fetch battles timeout, retrying...");
+        setTimeout(() => fetchBattles(page, tab, append), 1000);
+        return;
       }
+      console.error("Error fetching battles:", error);
+      if (!append) setBattles([]); 
       setLoading(false);
       setLoadingMore(false);
       return;
@@ -268,11 +279,10 @@ export default function ExploreDashboard() {
     setLoadingMore(false);
   }, [supabase, followedUsers]);
 
-  // ── Load on tab change ──
   useEffect(() => {
     pageRef.current = 0;
     fetchBattles(0, activeTab);
-  }, [activeTab, fetchBattles]);
+  }, [activeTab, fetchBattles, wakeCount]);
 
   // ── Infinite Scroll Observer ──
   useEffect(() => {
