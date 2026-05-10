@@ -93,7 +93,7 @@ export default function AdminDashboard() {
       
       let { data, error } = await supabase
         .from('transactions')
-        .select('*, profiles!fk_user(username)')
+        .select('*, profiles!fk_user(username, bank_name, id_card, phone_number)')
         .order('created_at', { ascending: false })
         .limit(200)
         .abortSignal(controller.signal);
@@ -102,7 +102,7 @@ export default function AdminDashboard() {
         console.warn("PGRST201: Intentando con transactions_user_id_fkey...");
         const res2 = await supabase
           .from('transactions')
-          .select('*, profiles!transactions_user_id_fkey(username)')
+          .select('*, profiles!transactions_user_id_fkey(username, bank_name, id_card, phone_number)')
           .order('created_at', { ascending: false })
           .limit(200)
           .abortSignal(controller.signal);
@@ -486,7 +486,7 @@ export default function AdminDashboard() {
               <table className="w-full text-left border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-white/10 bg-white/5">
-                    {["Tipo","Usuario","Datos Bancarios","Referencia","BS","CR","Estado","Fecha","Acciones"].map(h => (
+                    {["Tipo","Usuario","Banco","Referencia","BS","CR","Estado","Fecha","Acciones"].map(h => (
                       <th key={h} className="px-4 py-3 font-medium text-white/35 text-xs uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
@@ -506,7 +506,7 @@ export default function AdminDashboard() {
                         </td>
                         <td className="px-4 py-3 font-medium text-[#00d1ff]">@{prof?.username || "—"}</td>
                         <td className="px-4 py-3 text-xs text-white/50 space-y-0.5">
-                          <p className="font-medium text-white/70">{prof?.bank_name || "—"}</p>
+                          <p className="font-medium text-white/70">{txn.bank_name || prof?.bank_name || "—"}</p>
                           <p>{prof?.id_card}</p><p>{prof?.phone_number}</p>
                         </td>
                         <td className="px-4 py-3 font-mono text-xs">{txn.reference_number || "—"}</td>

@@ -85,6 +85,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
       user_id: currentUser.id, type: "DEPOSIT",
       amount_bs: parseFloat(amountBs.replace(",", ".")), amount_credits: amountCredits,
       reference_number: refNumber, status: "pending",
+      bank_name: selectedBank,
     };
 
     const { error } = await supabase.from("transactions").insert(payload);

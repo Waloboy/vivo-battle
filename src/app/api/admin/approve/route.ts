@@ -20,10 +20,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error("Missing Supabase configuration. URL present:", !!supabaseUrl, "Key present:", !!supabaseServiceKey);
+      return NextResponse.json(
+        { error: "Server configuration error: SUPABASE_SERVICE_ROLE_KEY is missing in environment variables." },
+        { status: 500 }
+      );
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     if (action === "approve") {
       // 1. Mark as approved

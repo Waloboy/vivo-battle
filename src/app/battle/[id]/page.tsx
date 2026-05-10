@@ -120,7 +120,8 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="flex flex-col items-center gap-6"
-            >              <div className="flex items-center gap-4 sm:gap-8 mb-2">
+            >
+              <div className="flex items-center gap-4 sm:gap-8 mb-2">
                 <div className="flex flex-col items-center gap-1.5">
                   <div className="rounded-full border-2 border-[#00d1ff] p-0.5" style={{ width: 'clamp(48px, 14vw, 80px)', height: 'clamp(48px, 14vw, 80px)' }}>
                     <div className="w-full h-full rounded-full bg-white/5 flex items-center justify-center overflow-hidden">
@@ -322,7 +323,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         if (!user) return;
         if (isMounted) setUser(user);
         
-        const { data: p } = await supabase.from("profiles").select("username").eq("id", user.id).abortSignal(controller.signal).single();
+        const { data: p } = await supabase.from("profiles").select("username, bank_name").eq("id", user.id).abortSignal(controller.signal).single();
         if (p && isMounted) setProfile(p);
         
         const b = await getWalletCredits(user.id);
@@ -338,7 +339,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
           else if (user.id === battle.player_b_id) setMySide("B");
           else setMySide("Audience");
 
-          const { data: profs } = await supabase.from("profiles").select("id, username, avatar_url").in("id", [battle.player_a_id, battle.player_b_id]).abortSignal(controller.signal);
+          const { data: profs } = await supabase.from("profiles").select("id, username, avatar_url, bank_name").in("id", [battle.player_a_id, battle.player_b_id]).abortSignal(controller.signal);
           if (profs && isMounted) {
             setPlayerA(profs.find((pr: any) => pr.id === battle.player_a_id));
             setPlayerB(profs.find((pr: any) => pr.id === battle.player_b_id));
@@ -426,13 +427,23 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     return () => clearInterval(syncInterval);
   }, [id, supabase]);
 
-  // Master Timer
+  // Master Timer — anchored to server started_at, re-syncs on tab focus
   useEffect(() => {
     if (!battleData?.started_at || !bothConnected) return;
     const t = setInterval(() => {
       setTimeLeft(calculateTimeLeft(battleData.started_at));
     }, 1000);
-    return () => clearInterval(t);
+
+    // Re-sync immediately when user returns to tab (background throttle fix)
+    const onFocus = () => setTimeLeft(calculateTimeLeft(battleData.started_at));
+    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [battleData?.started_at, bothConnected]);
 
   // Sync True Start Time
@@ -623,12 +634,25 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       if (walletBal < gift.cost) { alert(`Saldo WCR insuficiente. Necesitas ${fmtWCR(gift.cost)} en tu billetera (depósitos).`); return; }
       setIsSending(true);
       playSound("gift");
-      const { error: txError } = await supabase.from("transactions").insert({ user_id: user.id, type: "GIFT_SENT", amount_credits: -gift.cost, amount_bs: 0, reference_number: `Envío Regalo: ${gift.label} a ${side}`, status: "approved" });
+      // 1. Fetch BCV Rate
+      const { data: bcvData } = await supabase.from("app_config").select("value").eq("key", "bcv_rate").single();
+      const currentBcvRate = bcvData && bcvData.value ? parseFloat(bcvData.value) : 50; // Fallback 50
+      const giftBsValue = gift.cost * currentBcvRate;
+
+      // 2. Insert transaction
+      const { error: txError } = await supabase.from("transactions").insert({ 
+        user_id: user.id, 
+        type: "GIFT_SENT", 
+        amount_credits: -gift.cost, 
+        amount_bs: -giftBsValue, 
+        reference_number: `Envío Regalo: ${gift.label} a ${side}`, 
+        status: "approved" 
+      });
       if (txError) throw txError;
 
-      // Update source of truth: profiles.wallet_credits
+      // 3. Update source of truth: profiles.wallet_credits (use freshly fetched walletBal)
       await supabase.from("profiles").update({
-        wallet_credits: Math.max(0, (profile.wallet_credits || 0) - gift.cost)
+        wallet_credits: Math.max(0, walletBal - gift.cost)
       }).eq("id", user.id);
       const b = await getWalletCredits(user.id);
       setBalance(b);
