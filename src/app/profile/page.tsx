@@ -74,7 +74,7 @@ export default function ProfilePage() {
         .from("transactions")
         .select("amount_credits, created_at, reference_number, opponent_id")
         .eq("user_id", user.id)
-        .in("type", ["battle_win", "bonus"])
+        .in("type", ["BATTLE_WIN", "battle_win", "bonus", "BONUS"])
         .eq("status", "approved")
         .order("created_at", { ascending: false })
         .limit(20);
@@ -293,7 +293,7 @@ export default function ProfilePage() {
             <div className="col-span-2 cyber-glass rounded-[2rem] p-5 flex items-center justify-between border-white/5">
               <div>
                 <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Total Ganado Histórico</p>
-                <p className="text-2xl font-black text-[#ffd700]">{fmtWCR(profile?.total_earned || 0)}</p>
+                <p className="text-2xl font-black text-[#ffd700]">{fmtBCR(profile?.total_earned || 0)}</p>
               </div>
               <div className="w-12 h-12 rounded-full bg-[#ffd700]/10 flex items-center justify-center border border-[#ffd700]/20">
                 <Trophy size={20} className="text-[#ffd700]" />

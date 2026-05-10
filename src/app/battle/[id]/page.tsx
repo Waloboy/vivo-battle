@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { GIFT_CATALOG, type GiftKey } from "../gifts";
 import { useAnimatedCount } from "../useAnimatedCount";
-import { getUserBalance, getWalletCredits } from "@/utils/balance";
+import { getWalletCredits } from "@/utils/balance";
 import { fmtWCR, fmtBCR } from "@/utils/format";
 
 import { LiveKitRoom, VideoTrack, AudioTrack, useTracks, useLocalParticipant, useParticipants } from '@livekit/components-react';
@@ -325,7 +325,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         const { data: p } = await supabase.from("profiles").select("username").eq("id", user.id).abortSignal(controller.signal).single();
         if (p && isMounted) setProfile(p);
         
-        const b = await getUserBalance(user.id);
+        const b = await getWalletCredits(user.id);
         if (isMounted) setBalance(b);
 
         const { data: battle } = await supabase.from("battles").select("*").eq("id", id).abortSignal(controller.signal).single();
@@ -630,7 +630,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       await supabase.from("profiles").update({
         wallet_credits: Math.max(0, (profile.wallet_credits || 0) - gift.cost)
       }).eq("id", user.id);
-      const b = await getUserBalance(user.id);
+      const b = await getWalletCredits(user.id);
       setBalance(b);
       if (gift.tier === 3) { fireSupremeConfetti(); triggerShake(8, 1000); flashGlow(side); setTakeover({ username: profile.username, label: gift.label, color: gift.color }); setTimeout(() => setTakeover(null), 3000); } 
       else flashGlow(side);
@@ -791,7 +791,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                       {rawA > rawB ? `@${playerA?.username}` : rawB > rawA ? `@${playerB?.username}` : "¡EMPATE!"}
                     </h3>
                     {rawA !== rawB && (
-                      <p className="text-[#ffd700] font-bold text-[10px]">+{fmtBCR(rawA + rawB)}</p>
+                      <p className="text-[#ffd700] font-bold text-[10px]">+{fmtBCR(rawA > rawB ? rawA : rawB)}</p>
                     )}
                   </div>
                 </div>
@@ -857,7 +857,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         </div>
         <div className="flex gap-2 items-center">
           <input id="battle-chat-msg" name="battle-chat-msg" type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === "Enter" && sendMsg()} placeholder="Type a message..." className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-2 text-white text-xs placeholder-white/20 focus:outline-none focus:border-[#00d1ff]/40" autoComplete="off" />
-          <button onClick={async () => { setShowGiftSheet(true); if(user) setBalance(await getUserBalance(user.id)); }} disabled={phase !== "BATTLE"} className="p-2 text-white/30 hover:text-[#ffd700] disabled:opacity-20 transition-colors"><Gift size={20} /></button>
+          <button onClick={async () => { setShowGiftSheet(true); if(user) setBalance(await getWalletCredits(user.id)); }} disabled={phase !== "BATTLE"} className="p-2 text-white/30 hover:text-[#ffd700] disabled:opacity-20 transition-colors"><Gift size={20} /></button>
           <button onClick={sendMsg} disabled={!newMessage.trim()} className="bg-[#00d1ff] disabled:opacity-30 text-black p-2 rounded-xl font-bold"><Send size={18} /></button>
         </div>
       </div>
