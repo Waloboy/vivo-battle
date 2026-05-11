@@ -3,13 +3,13 @@
 import { useState, useEffect } from "react";
 import {
   CheckCircle2, XCircle, Clock, Loader2, RefreshCw,
-  ShieldAlert, Sparkles, Scissors, Copy, CheckCheck, ChevronDown, ChevronUp, Swords, Trophy
+  ShieldAlert, Sparkles, Scissors, Copy, CheckCheck, ChevronDown, ChevronUp, Swords, Trophy, Banknote, MessageCircle, Mail, Phone, Building2, FileText
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { fmtWCR, fmtBCR, fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
 import { useAuth } from "@/components/AuthProvider";
 
-type Tab = "transactions" | "settlement" | "battle_settlement";
+type Tab = "transactions" | "settlement" | "battle_settlement" | "liquidaciones";
 
 interface SettlementRow {
   user_id: string;
@@ -439,6 +439,10 @@ export default function AdminDashboard() {
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${tab === "battle_settlement" ? "bg-[#00d1ff]/10 text-[#00d1ff] border border-[#00d1ff]/20" : "text-white/35 hover:text-white/60"}`}>
           <Trophy size={13}/> Liquidación BCR
         </button>
+        <button onClick={() => setTab("liquidaciones")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${tab === "liquidaciones" ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" : "text-white/35 hover:text-white/60"}`}>
+          <Banknote size={13}/> Liquidaciones
+        </button>
       </div>
 
       {/* ══════════════════════════════════════
@@ -475,14 +479,25 @@ export default function AdminDashboard() {
                       <p className="text-white/30 font-light">Monto BS</p>
                       <p className="font-bold">{fmtBs(parseFloat(txn.amount_bs || 0))}</p>
                     </div>
-                    <div className="col-span-2 space-y-1 mt-1 border-t border-white/5 pt-2">
-                      <p className="text-white/30 font-light text-[10px] uppercase">Datos del Usuario</p>
+                    {/* ── ENVIAR COMPROBANTE A ── */}
+                    <div className="col-span-2 mt-1 border-t border-white/5 pt-2 space-y-1.5">
+                      <p className="text-[#25D366] font-bold text-[10px] uppercase tracking-wider flex items-center gap-1"><MessageCircle size={10}/> Enviar Comprobante A:</p>
+                      <div className="flex flex-col gap-1 text-[11px]">
+                        {prof?.whatsapp_number ? (
+                          <a href={`https://wa.me/${prof.whatsapp_number.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[#25D366] hover:underline">
+                            <Phone size={10}/> {prof.whatsapp_number}
+                          </a>
+                        ) : <span className="text-white/20">WA: —</span>}
+                        <p className="flex items-center gap-1.5 text-white/60"><Mail size={10}/> {prof?.email || "—"}</p>
+                      </div>
+                    </div>
+                    {/* ── DATOS BANCARIOS (PAGO MÓVIL) ── */}
+                    <div className="col-span-2 border-t border-white/5 pt-2 space-y-1.5">
+                      <p className="text-[#ffd700] font-bold text-[10px] uppercase tracking-wider flex items-center gap-1"><Building2 size={10}/> Datos Bancarios (Pago Móvil):</p>
                       <div className="grid grid-cols-2 gap-1 text-[11px]">
                         <p><span className="text-white/40">Banco:</span> {txn.bank_name || prof?.bank_name || "—"}</p>
                         <p><span className="text-white/40">Cédula:</span> {prof?.id_card || "—"}</p>
-                        <p><span className="text-white/40">Tel:</span> {prof?.phone_number || "—"}</p>
-                        <p><span className="text-white/40">WA:</span> {prof?.whatsapp_number || "—"}</p>
-                        <p className="col-span-2"><span className="text-white/40">Email:</span> {prof?.email || "—"}</p>
+                        <p className="col-span-2"><span className="text-white/40">Tel Pago Móvil:</span> {prof?.phone_number || "—"}</p>
                       </div>
                     </div>
                   </div>
@@ -534,11 +549,20 @@ export default function AdminDashboard() {
                           </span>
                         </td>
                         <td className="px-4 py-3 font-medium text-[#00d1ff]">@{prof?.username || "—"}</td>
-                        <td className="px-4 py-3 text-xs text-white/50 space-y-0.5">
-                          <p className="font-medium text-white/70">{txn.bank_name || prof?.bank_name || "—"}</p>
-                          <p>ID: {prof?.id_card}</p><p>Tel: {prof?.phone_number}</p>
-                          <p>WA: {prof?.whatsapp_number || "—"}</p>
-                          <p className="text-[10px]">{prof?.email || "—"}</p>
+                        <td className="px-4 py-3 text-xs space-y-2">
+                          <div className="space-y-0.5">
+                            <p className="text-[9px] text-[#25D366] font-bold uppercase tracking-wider flex items-center gap-1"><MessageCircle size={9}/> Comprobante A:</p>
+                            {prof?.whatsapp_number ? (
+                              <a href={`https://wa.me/${prof.whatsapp_number.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-[#25D366] hover:underline flex items-center gap-1"><Phone size={9}/> {prof.whatsapp_number}</a>
+                            ) : <span className="text-white/20">WA: —</span>}
+                            <p className="text-white/50 flex items-center gap-1"><Mail size={9}/> {prof?.email || "—"}</p>
+                          </div>
+                          <div className="border-t border-white/5 pt-1.5 space-y-0.5">
+                            <p className="text-[9px] text-[#ffd700] font-bold uppercase tracking-wider flex items-center gap-1"><Building2 size={9}/> Pago Móvil:</p>
+                            <p className="font-medium text-white/70">{txn.bank_name || prof?.bank_name || "—"}</p>
+                            <p className="text-white/50">CI: {prof?.id_card || "—"}</p>
+                            <p className="text-white/50">Tel: {prof?.phone_number || "—"}</p>
+                          </div>
                         </td>
                         <td className="px-4 py-3 font-mono text-xs">{txn.reference_number || "—"}</td>
                         <td className="px-4 py-3 font-semibold">{fmtBs(parseFloat(txn.amount_bs || 0))}</td>
@@ -846,6 +870,95 @@ export default function AdminDashboard() {
           )}
         </div>
       )}
+
+      {/* ══════════════════════════════════════
+          TAB: LIQUIDACIONES (WITHDRAW_BCR only)
+      ══════════════════════════════════════ */}
+      {tab === "liquidaciones" && (() => {
+        const liqTxns = transactions.filter((t: any) => t.type === "WITHDRAW_BCR");
+        const pendingLiq = liqTxns.filter((t: any) => t.status === "pending");
+        const approvedLiq = liqTxns.filter((t: any) => t.status === "approved");
+        const totalPendingBs = pendingLiq.reduce((s: number, t: any) => s + parseFloat(t.amount_bs || 0), 0);
+        return (
+          <div className="space-y-4">
+            {/* Summary cards */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="cyber-glass rounded-xl p-4 border-white/5 text-center">
+                <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">Pendientes</p>
+                <p className="text-xl font-black text-orange-400">{pendingLiq.length}</p>
+              </div>
+              <div className="cyber-glass rounded-xl p-4 border-white/5 text-center">
+                <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">Aprobadas</p>
+                <p className="text-xl font-black text-emerald-400">{approvedLiq.length}</p>
+              </div>
+              <div className="cyber-glass rounded-xl p-4 border-white/5 text-center">
+                <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">Bs Pendiente</p>
+                <p className="text-xl font-black text-[#ffd700]">{fmtBs(totalPendingBs)}</p>
+              </div>
+            </div>
+
+            {liqTxns.length === 0 ? (
+              <div className="py-10 text-center text-white/30 text-sm">No hay solicitudes de cobro BCR.</div>
+            ) : (
+              <div className="space-y-3">
+                {liqTxns.map((txn: any) => {
+                  const isProc = processingId === txn.id;
+                  const prof = txn.profiles;
+                  return (
+                    <div key={txn.id} className={`cyber-glass rounded-2xl p-4 border overflow-hidden transition-all ${txn.status === "pending" ? "border-orange-500/20" : txn.status === "approved" ? "border-emerald-500/20 opacity-70" : "border-red-500/20 opacity-50"}`}>
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div>
+                          <p className="font-semibold text-sm text-[#00d1ff]">@{prof?.username || "—"}</p>
+                          <p className="text-[10px] text-white/25 mt-0.5">{new Date(txn.created_at).toLocaleDateString("es-VE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-black text-[#ffd700]">{fmtBs(parseFloat(txn.amount_bs || 0))}</p>
+                          <p className="text-xs font-bold text-orange-400">{fmtBCR(txn.amount_credits ?? 0)}</p>
+                        </div>
+                      </div>
+
+                      {/* Separated info blocks */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                        {/* Contact info */}
+                        <div className="bg-[#25D366]/5 rounded-xl p-3 border border-[#25D366]/10">
+                          <p className="text-[#25D366] font-bold text-[9px] uppercase tracking-wider mb-1.5 flex items-center gap-1"><MessageCircle size={9}/> Enviar Comprobante A:</p>
+                          {prof?.whatsapp_number ? (
+                            <a href={`https://wa.me/${prof.whatsapp_number.replace(/\D/g, '')}?text=Hola%20${prof.username},%20tu%20cobro%20BCR%20por%20${fmtBs(parseFloat(txn.amount_bs || 0))}%20ha%20sido%20procesado.`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm text-[#25D366] hover:underline font-medium mb-1">
+                              <Phone size={11}/> {prof.whatsapp_number}
+                            </a>
+                          ) : <span className="text-white/20 text-sm">WA no configurado</span>}
+                          <p className="text-xs text-white/50 flex items-center gap-1"><Mail size={10}/> {prof?.email || "—"}</p>
+                        </div>
+                        {/* Banking info */}
+                        <div className="bg-[#ffd700]/5 rounded-xl p-3 border border-[#ffd700]/10">
+                          <p className="text-[#ffd700] font-bold text-[9px] uppercase tracking-wider mb-1.5 flex items-center gap-1"><Building2 size={9}/> Datos Pago Móvil:</p>
+                          <p className="text-sm font-medium text-white/80">{txn.bank_name || prof?.bank_name || "—"}</p>
+                          <p className="text-xs text-white/50">CI: {prof?.id_card || "—"}</p>
+                          <p className="text-xs text-white/50">Tel: {prof?.phone_number || "—"}</p>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center justify-between">
+                        <StatusBadge status={txn.status}/>
+                        {txn.status === "pending" && (
+                          <div className="flex gap-2">
+                            {isProc ? <Loader2 className="animate-spin" size={18}/> : (<>
+                              <button onClick={() => handleApprove(txn)} className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20 flex items-center gap-1 text-xs font-bold"><CheckCircle2 size={13}/> Aprobar</button>
+                              <button onClick={() => handleReject(txn)} className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg border border-red-500/20" title="Rechazar"><XCircle size={15}/></button>
+                            </>)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

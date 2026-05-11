@@ -429,8 +429,17 @@ export default function ProfilePage() {
             <ArrowLeft size={16} /> Volver a Mi Oficina
           </button>
 
+          {/* ══════════════════════════════════════
+              BLOQUE 1: DATOS PERSONALES
+          ══════════════════════════════════════ */}
           <div className="cyber-glass rounded-3xl p-6 border-white/5">
-            <h2 className="text-xl font-black text-white mb-6">Información Personal</h2>
+            <div className="flex items-center gap-2 mb-5">
+              <div className="p-2 rounded-xl bg-[#00d1ff]/10"><User size={18} className="text-[#00d1ff]" /></div>
+              <div>
+                <h2 className="text-lg font-black text-white">Datos Personales</h2>
+                <p className="text-[10px] text-white/30 uppercase tracking-wider">Información de contacto y perfil público</p>
+              </div>
+            </div>
             
             <div className="space-y-4">
               <div className="space-y-1.5">
@@ -504,43 +513,6 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Cédula</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <FileText size={16} className="text-white/40" />
-                  </div>
-                  <input
-                    id="profile-id-card"
-                    name="id_card"
-                    type="text"
-                    value={profile?.id_card || ""}
-                    onChange={(e) => setProfile({ ...profile, id_card: e.target.value })}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
-                    placeholder="V-12345678"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Teléfono</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Phone size={16} className="text-white/40" />
-                  </div>
-                  <input
-                    id="profile-phone"
-                    name="phone_number"
-                    type="text"
-                    value={profile?.phone_number || ""}
-                    onChange={(e) => setProfile({ ...profile, phone_number: e.target.value })}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
-                    placeholder="0414-1234567"
-                    autoComplete="tel"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">WhatsApp</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -577,12 +549,27 @@ export default function ProfilePage() {
                   />
                 </div>
               </div>
+            </div>
+          </div>
 
+          {/* ══════════════════════════════════════
+              BLOQUE 2: DATOS BANCARIOS / PAGO MÓVIL
+          ══════════════════════════════════════ */}
+          <div className="cyber-glass rounded-3xl p-6 border border-[#ffd700]/10">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="p-2 rounded-xl bg-[#ffd700]/10"><Building2 size={18} className="text-[#ffd700]" /></div>
+              <div>
+                <h2 className="text-lg font-black text-white">Datos Bancarios / Pago Móvil</h2>
+                <p className="text-[10px] text-white/30 uppercase tracking-wider">Para recibir pagos y retiros</p>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Banco Destino</label>
+                <label className="text-[10px] font-bold text-[#ffd700]/60 uppercase tracking-widest">Banco Destino</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Building2 size={16} className="text-white/40" />
+                    <Building2 size={16} className="text-[#ffd700]/40" />
                   </div>
                   <input
                     id="profile-bank"
@@ -590,27 +577,69 @@ export default function ProfilePage() {
                     type="text"
                     value={profile?.bank_name || ""}
                     onChange={(e) => setProfile({ ...profile, bank_name: e.target.value })}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors"
+                    className="w-full bg-black/40 border border-[#ffd700]/15 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#ffd700]/50 transition-colors"
                     placeholder="Banesco, Mercantil, etc."
                   />
                 </div>
               </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-[#ffd700]/60 uppercase tracking-widest">Cédula</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <FileText size={16} className="text-[#ffd700]/40" />
+                  </div>
+                  <input
+                    id="profile-id-card"
+                    name="id_card"
+                    type="text"
+                    value={profile?.id_card || ""}
+                    onChange={(e) => setProfile({ ...profile, id_card: e.target.value })}
+                    className="w-full bg-black/40 border border-[#ffd700]/15 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#ffd700]/50 transition-colors"
+                    placeholder="V-12345678"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-[#ffd700]/60 uppercase tracking-widest">Teléfono Pago Móvil</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Phone size={16} className="text-[#ffd700]/40" />
+                  </div>
+                  <input
+                    id="profile-phone"
+                    name="phone_number"
+                    type="text"
+                    value={profile?.phone_number || ""}
+                    onChange={(e) => setProfile({ ...profile, phone_number: e.target.value })}
+                    className="w-full bg-black/40 border border-[#ffd700]/15 rounded-xl py-3 pl-12 pr-4 text-white placeholder-white/20 focus:outline-none focus:border-[#ffd700]/50 transition-colors"
+                    placeholder="0414-1234567"
+                    autoComplete="tel"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-[#ffd700]/5 border border-[#ffd700]/10 rounded-xl p-3 text-[11px] text-[#ffd700]/60 leading-relaxed">
+                💡 Estos datos serán usados por el Admin para procesar tus retiros y enviar comprobantes de pago.
+              </div>
             </div>
-
-            {saveMessage && (
-              <p className={`mt-4 text-xs font-bold text-center ${saveMessage.includes("Error") || saveMessage.includes("uso") ? "text-red-400" : "text-emerald-400"}`}>
-                {saveMessage}
-              </p>
-            )}
-
-            <button
-              onClick={handleSave}
-              disabled={isSaving || usernameStatus === "taken" || usernameStatus === "checking"}
-              className="mt-8 w-full py-4 bg-gradient-to-r from-[#00d1ff] to-[#ff007a] text-white rounded-xl font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(0,209,255,0.3)] hover:shadow-[0_0_30px_rgba(255,0,122,0.5)] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {isSaving ? <Loader2 className="animate-spin" size={20} /> : <><Save size={20} /> Guardar Cambios</>}
-            </button>
           </div>
+
+          {/* ── Save Button + Message ── */}
+          {saveMessage && (
+            <p className={`text-xs font-bold text-center ${saveMessage.includes("Error") || saveMessage.includes("uso") ? "text-red-400" : "text-emerald-400"}`}>
+              {saveMessage}
+            </p>
+          )}
+
+          <button
+            onClick={handleSave}
+            disabled={isSaving || usernameStatus === "taken" || usernameStatus === "checking"}
+            className="w-full py-4 bg-gradient-to-r from-[#00d1ff] to-[#ff007a] text-white rounded-xl font-black uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(0,209,255,0.3)] hover:shadow-[0_0_30px_rgba(255,0,122,0.5)] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {isSaving ? <Loader2 className="animate-spin" size={20} /> : <><Save size={20} /> Guardar Cambios</>}
+          </button>
         </div>
       )}
     </div>
