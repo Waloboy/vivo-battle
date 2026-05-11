@@ -3,6 +3,7 @@ import { Inter, Orbitron } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { AuthProvider } from "@/components/AuthProvider";
+import { ClientShell } from "@/components/ClientShell";
 import { ChallengeNotification } from "@/components/ChallengeNotification";
 import { ConnectionManager } from "@/components/ConnectionManager";
 
@@ -26,14 +27,17 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} ${orbitron.variable} bg-[#0a0a0a] text-white min-h-screen flex flex-col`}>
         <AuthProvider>
-          <ConnectionManager />
-          <Navbar />
-          <ChallengeNotification />
-          <main className="flex-1 flex flex-col">
-            {children}
-          </main>
+          <ClientShell>
+            <ConnectionManager />
+            <Navbar />
+            <ChallengeNotification />
+            <main className="flex-1 flex flex-col">
+              {children}
+            </main>
+          </ClientShell>
         </AuthProvider>
       </body>
     </html>
   );
 }
+
