@@ -40,7 +40,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function AdminDashboard() {
   const supabase = createClient();
-  const { user: authUser, isAdmin, loading: authLoading } = useAuth();
+  const { user: authUser, profile, isAdmin, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -412,6 +412,14 @@ export default function AdminDashboard() {
       <ShieldAlert className="text-red-500" size={56}/>
       <h1 className="text-2xl font-black">Acceso Denegado</h1>
       <p className="text-white/40 max-w-sm text-sm">No tienes permisos para acceder al Panel de Administración.</p>
+    </div>
+  );
+
+  if (verifiedAdmin && !profile) return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
+      <Loader2 className="animate-spin text-yellow-400" size={56}/>
+      <h1 className="text-2xl font-black">Sincronizando seguridad...</h1>
+      <p className="text-white/40 max-w-sm text-sm">Validando tu identidad para evitar el modo invitado.</p>
     </div>
   );
 

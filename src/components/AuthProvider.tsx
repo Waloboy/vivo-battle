@@ -29,15 +29,68 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => createClient(), []);
 
-  const [user, setUser]       = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  // Use localStorage as absolute truth initially
+  const [user, setUser] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("vivo_user_data");
+        return stored ? JSON.parse(stored) : null;
+      } catch {}
+    }
+    return null;
+  });
+
+  const [profile, setProfile] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("vivo_user_profile");
+        return stored ? JSON.parse(stored) : null;
+      } catch {}
+    }
+    return null;
+  });
+
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("vivo_is_admin") === "true";
+    }
+    return false;
+  });
+
   const [loading, setLoading] = useState(true);
 
   const didInit = useRef(false);
+  const lockUntil = useRef(Date.now() + 10000); // 10 second lock for nullification
+
+  // Wrapper for state updates to enforce the 10-second rule
+  const safeUpdateAuth = useCallback((newUser: any, newProfile: any, newIsAdmin: boolean) => {
+    const isLocked = Date.now() < lockUntil.current;
+    
+    // If locked, we reject setting to null. Only real data can overwrite.
+    if (isLocked && !newProfile) {
+      console.log("[Auth] Ignoring nullification request due to 10s security lock.");
+      return;
+    }
+
+    setUser(newUser);
+    setProfile(newProfile);
+    setIsAdmin(newIsAdmin);
+
+    if (typeof window !== "undefined") {
+      if (newUser && newProfile) {
+        localStorage.setItem("vivo_user_data", JSON.stringify(newUser));
+        localStorage.setItem("vivo_user_profile", JSON.stringify(newProfile));
+        localStorage.setItem("vivo_is_admin", String(newIsAdmin));
+      } else if (!isLocked) {
+        localStorage.removeItem("vivo_user_data");
+        localStorage.removeItem("vivo_user_profile");
+        localStorage.removeItem("vivo_is_admin");
+      }
+    }
+  }, []);
 
   // ── fetchProfile: strict — only real DB data ────────────────────────────
-  const fetchProfile = useCallback(async (userId: string): Promise<boolean> => {
+  const fetchProfile = useCallback(async (userId: string, currentUser: any): Promise<boolean> => {
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -50,34 +103,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      setProfile(data);
-      setIsAdmin(data.role === "admin");
+      safeUpdateAuth(currentUser, data, data.role === "admin");
       return true;
     } catch (e) {
       console.warn("[Auth] fetchProfile error:", e);
       return false;
     }
+  }, [supabase, safeUpdateAuth]);
+
+  // Save tokens manually
+  const storeTokens = useCallback(async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session && typeof window !== "undefined") {
+        localStorage.setItem("vivo_access_token", data.session.access_token);
+        localStorage.setItem("vivo_refresh_token", data.session.refresh_token);
+      }
+    } catch {}
   }, [supabase]);
 
   // ── refreshAuth: main entry point ───────────────────────────────────────
   const refreshAuth = useCallback(async () => {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user) {
-        setUser(session.user);
-        await fetchProfile(session.user.id);
+        await fetchProfile(session.user.id, session.user);
+        storeTokens();
       } else {
-        setUser(null);
-        setProfile(null);
-        setIsAdmin(false);
+        safeUpdateAuth(null, null, false);
       }
     } catch (e) {
       console.warn("[Auth] error refreshing session:", e);
     } finally {
       setLoading(false);
     }
-  }, [supabase, fetchProfile]);
+  }, [supabase, fetchProfile, safeUpdateAuth, storeTokens]);
 
   // ── Init + listeners ────────────────────────────────────────────────────
   useEffect(() => {
@@ -91,25 +152,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event: any, session: any) => {
         if (session?.user) {
-          setUser(session.user);
-          await fetchProfile(session.user.id);
+          await fetchProfile(session.user.id, session.user);
+          storeTokens();
         } else {
-          setUser(null);
-          setProfile(null);
-          setIsAdmin(false);
+          safeUpdateAuth(null, null, false);
         }
         setLoading(false);
       }
     );
 
-    // 3. Fallback loading timeout (don't block forever)
+    // 3. Manual Token Persistence on Focus
+    const handleFocus = async () => {
+      console.log("[Auth] Window focused, enforcing session persistence...");
+      if (typeof window !== "undefined") {
+        const at = localStorage.getItem("vivo_access_token");
+        const rt = localStorage.getItem("vivo_refresh_token");
+        if (at && rt) {
+          try {
+             const { error } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+             if (!error) storeTokens();
+          } catch (e) { console.warn("[Auth] Manual token restore failed", e); }
+        }
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+
+    // 4. Fallback loading timeout (don't block forever)
     const fallback = setTimeout(() => setLoading(false), 2000);
 
     return () => {
       authListener.subscription.unsubscribe();
+      window.removeEventListener("focus", handleFocus);
       clearTimeout(fallback);
     };
-  }, [refreshAuth, fetchProfile, supabase.auth]);
+  }, [refreshAuth, fetchProfile, supabase.auth, safeUpdateAuth, storeTokens]);
 
   return (
     <AuthContext.Provider value={{ user, profile, isAdmin, loading, refreshAuth }}>
