@@ -87,13 +87,10 @@ export default function ExploreDashboard() {
   const [matchmaking, setMatchmaking] = useState(false);
   const [wakeCount, setWakeCount] = useState(0);
 
-  const [showRetry, setShowRetry] = useState(false);
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (loading) {
-      timer = setTimeout(() => setShowRetry(true), 5000);
-    } else {
-      setShowRetry(false);
+      timer = setTimeout(() => setLoading(false), 3000);
     }
     return () => clearTimeout(timer);
   }, [loading]);
@@ -516,11 +513,6 @@ export default function ExploreDashboard() {
               <Loader2 className="animate-spin text-[#ff007a]" size={36} />
               <span className="text-white/30 text-xs font-medium">Cargando batallas...</span>
             </div>
-            {showRetry && (
-              <button onClick={() => window.location.reload()} className="px-4 py-2 bg-[#ff007a]/20 hover:bg-[#ff007a]/30 text-[#ff007a] rounded-xl text-sm font-bold border border-[#ff007a]/30 transition-colors">
-                Reintentar
-              </button>
-            )}
           </div>
         </div>
       )}

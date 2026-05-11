@@ -251,6 +251,14 @@ export default function MessagesPage() {
     return d.toLocaleDateString("es-VE", { day: "numeric", month: "short" });
   };
 
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (loading) {
+      timer = setTimeout(() => setLoading(false), 3000);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">

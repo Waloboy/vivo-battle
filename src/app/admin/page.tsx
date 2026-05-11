@@ -22,6 +22,8 @@ interface SettlementRow {
   user_share_cr: number;
   app_share_cr: number;
   user_payout_bs: number;
+  app_share_bs: number;
+  total_bs: number;
   paid: boolean;
   expanded: boolean;
 }
@@ -43,6 +45,7 @@ export default function AdminDashboard() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [adminRefs, setAdminRefs] = useState<Record<string, string>>({});
 
   // Settlement
   const [settlement, setSettlement] = useState<SettlementRow[]>([]);
@@ -158,13 +161,11 @@ export default function AdminDashboard() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000);
       
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const { data: gifts, error } = await supabase
         .from("transactions")
-        .select("user_id, amount_credits, profiles(username, bank_name, id_card, phone_number, whatsapp_number, email)")
+        .select("user_id, amount_credits, amount_bs, profiles(username, bank_name, id_card, phone_number, whatsapp_number, email)")
         .in("type", ["gift", "GIFT_SENT", "GIFT"])
         .eq("status", "approved")
-        .gte("created_at", weekAgo)
         .abortSignal(controller.signal);
       
       clearTimeout(timeoutId);
@@ -180,15 +181,19 @@ export default function AdminDashboard() {
             user_id: g.user_id, username: p?.username || "—",
             bank_name: p?.bank_name || null, id_card: p?.id_card || null, phone_number: p?.phone_number || null,
             total_cr: 0, user_share_cr: 0, app_share_cr: 0, user_payout_bs: 0,
+            total_bs: 0, app_share_bs: 0,
             paid: false, expanded: false,
           });
         }
-        map.get(g.user_id)!.total_cr += g.amount_credits;
+        const row = map.get(g.user_id)!;
+        row.total_cr += (g.amount_credits || 0);
+        row.total_bs += parseFloat(g.amount_bs || "0");
       }
       for (const row of map.values()) {
         row.user_share_cr = Math.floor(row.total_cr * 0.6);
         row.app_share_cr = row.total_cr - row.user_share_cr;
-        row.user_payout_bs = crToBs(row.user_share_cr, bcvRate || exchangeRate);
+        row.user_payout_bs = row.total_bs * 0.6;
+        row.app_share_bs = row.total_bs * 0.4;
       }
       if (isMounted) setSettlement(Array.from(map.values()).sort((a, b) => b.total_cr - a.total_cr));
     } catch (err: any) {
@@ -218,13 +223,11 @@ export default function AdminDashboard() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const { data: wins, error } = await supabase
         .from("transactions")
         .select("user_id, amount_credits, opponent_id, battle_id, created_at, reference_number, profiles(username, bank_name, id_card, phone_number, whatsapp_number, email)")
         .in("type", ["battle_win", "BATTLE_WIN"])
         .eq("status", "approved")
-        .gte("created_at", weekAgo)
         .abortSignal(controller.signal);
 
       clearTimeout(timeoutId);
@@ -241,6 +244,7 @@ export default function AdminDashboard() {
             user_id: w.user_id, username: p?.username || "—",
             bank_name: p?.bank_name || null, id_card: p?.id_card || null, phone_number: p?.phone_number || null,
             total_cr: 0, user_share_cr: 0, app_share_cr: 0, user_payout_bs: 0,
+            total_bs: 0, app_share_bs: 0,
             paid: false, expanded: false,
           });
         }
@@ -272,8 +276,13 @@ export default function AdminDashboard() {
     setCopiedField(fieldId);
     setTimeout(() => setCopiedField(null), 1500);
   };
-
   const handleApprove = async (txn: any) => {
+    const adminRef = adminRefs[txn.id] || "";
+    if ((txn.type === "WITHDRAW" || txn.type === "withdrawal" || txn.type === "WITHDRAW_BCR") && !adminRef.trim()) {
+      alert("Por favor, ingresa los 6 dígitos de la referencia de pago.");
+      return;
+    }
+
     setProcessingId(txn.id);
     
     try {
@@ -284,7 +293,8 @@ export default function AdminDashboard() {
           transaction_id: txn.id,
           user_id: txn.user_id,
           amount_credits: txn.amount_credits,
-          action: "approve"
+          action: "approve",
+          admin_reference: adminRef
         })
       });
 
@@ -342,13 +352,12 @@ export default function AdminDashboard() {
     else alert("Tasa BCV actualizada correctamente.");
   };
 
-  const [showRetry, setShowRetry] = useState(false);
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (authLoading || (isAdmin && dataLoading)) {
-      timer = setTimeout(() => setShowRetry(true), 5000);
-    } else {
-      setShowRetry(false);
+      timer = setTimeout(() => {
+        // You would theoretically set authLoading to false, but we'll just force the page
+      }, 3000);
     }
     return () => clearTimeout(timer);
   }, [authLoading, isAdmin, dataLoading]);
@@ -358,11 +367,6 @@ export default function AdminDashboard() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
         <Loader2 className="animate-spin text-[#ff007a]" size={40}/>
-        {showRetry && (
-          <button onClick={() => window.location.reload()} className="px-4 py-2 bg-[#ff007a]/20 hover:bg-[#ff007a]/30 text-[#ff007a] rounded-xl text-sm font-bold border border-[#ff007a]/30 transition-colors">
-            Reintentar
-          </button>
-        )}
       </div>
     );
   }
@@ -519,8 +523,29 @@ export default function AdminDashboard() {
                         <p className="col-span-2"><span className="text-white/40">Tel Pago Móvil:</span> {prof?.phone_number || "—"}</p>
                       </div>
                     </div>
+                    {/* ── REFERENCIA USUARIO (Para recargas) ── */}
+                    {txn.reference_number && (
+                      <div className="col-span-2 border-t border-white/5 pt-2 space-y-1.5">
+                        <p className="text-[#00d1ff] font-bold text-[10px] uppercase tracking-wider">Referencia Usuario:</p>
+                        <p className="font-mono text-xs font-black bg-white/5 py-1 px-2 rounded">{txn.reference_number}</p>
+                      </div>
+                    )}
+
+                    {/* ── REFERENCIA ADMIN (Solo retiros/cobros) ── */}
+                    {(txn.type === "WITHDRAW" || txn.type === "WITHDRAW_BCR" || txn.type === "withdrawal") && txn.status === "pending" && (
+                      <div className="col-span-2 mt-2">
+                        <input
+                          type="text"
+                          placeholder="Escribe ref. de pago (6 dígitos)"
+                          maxLength={6}
+                          value={adminRefs[txn.id] || ""}
+                          onChange={(e) => setAdminRefs({ ...adminRefs, [txn.id]: e.target.value.replace(/\D/g, '') })}
+                          className="w-full bg-black/40 border border-white/20 rounded-lg py-1.5 px-3 text-xs text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mt-2">
                     <p className="text-[10px] text-white/25">{new Date(txn.created_at).toLocaleDateString("es-VE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
                     {txn.type === "gift" || txn.type === "GIFT_SENT" || txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? (
                       <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-bold ${txn.type.includes("BATTLE") ? "bg-[#ffd700]/10 text-[#ffd700] border-[#ffd700]/20" : "bg-[#e056fd]/10 text-[#e056fd] border-[#e056fd]/20"}`}><Sparkles size={9}/> Auto</span>
@@ -594,16 +619,28 @@ export default function AdminDashboard() {
                           {txn.type === "gift" || txn.type === "GIFT_SENT" || txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? (
                             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-bold ${txn.type.includes("BATTLE") ? "bg-[#ffd700]/10 text-[#ffd700] border-[#ffd700]/20" : "bg-[#e056fd]/10 text-[#e056fd] border-[#e056fd]/20"}`}><Sparkles size={9}/> Auto</span>
                           ) : txn.status === "pending" ? (
-                            <div className="flex items-center justify-end gap-1.5">
-                              {isProc ? <Loader2 className="animate-spin" size={18}/> : (<>
-                                <button onClick={() => handleApprove(txn)} className="px-2 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20 flex items-center gap-1"><CheckCircle2 size={13}/> Aprobar</button>
-                                <button onClick={() => handleReject(txn)} className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg border border-red-500/20" title="Rechazar"><XCircle size={15}/></button>
-                                {(txn.type === "WITHDRAW" || txn.type === "WITHDRAW_BCR" || txn.type === "withdrawal") && prof?.whatsapp_number && (
-                                  <a href={`https://wa.me/${prof.whatsapp_number.replace(/\D/g, '')}?text=Hola%20${prof.username},%20tu%20solicitud%20de%20retiro%20por%20${fmtBs(parseFloat(txn.amount_bs || 0))}%20ha%20sido%20aprobada%20y%20procesada.`} target="_blank" rel="noreferrer" className="p-1.5 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] rounded-lg border border-[#25D366]/20 flex items-center gap-1" title="Notificar Vía WhatsApp">
-                                    <CheckCheck size={13}/> WA
-                                  </a>
-                                )}
-                              </>)}
+                            <div className="flex flex-col items-end gap-2">
+                              {(txn.type === "WITHDRAW" || txn.type === "WITHDRAW_BCR" || txn.type === "withdrawal") && (
+                                <input
+                                  type="text"
+                                  placeholder="Ref. pago (6 dígitos)"
+                                  maxLength={6}
+                                  value={adminRefs[txn.id] || ""}
+                                  onChange={(e) => setAdminRefs({ ...adminRefs, [txn.id]: e.target.value.replace(/\D/g, '') })}
+                                  className="w-[120px] bg-black/40 border border-white/20 rounded-md py-1 px-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-emerald-500"
+                                />
+                              )}
+                              <div className="flex items-center gap-1.5">
+                                {isProc ? <Loader2 className="animate-spin" size={18}/> : (<>
+                                  <button onClick={() => handleApprove(txn)} className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-md border border-emerald-500/20 flex items-center gap-1"><CheckCircle2 size={13}/> Aprobar</button>
+                                  <button onClick={() => handleReject(txn)} className="p-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-md border border-red-500/20" title="Rechazar"><XCircle size={15}/></button>
+                                  {(txn.type === "WITHDRAW" || txn.type === "WITHDRAW_BCR" || txn.type === "withdrawal") && prof?.whatsapp_number && (
+                                    <a href={`https://wa.me/${prof.whatsapp_number.replace(/\D/g, '')}?text=Hola%20${prof.username},%20tu%20solicitud%20de%20retiro%20por%20${fmtBs(parseFloat(txn.amount_bs || 0))}%20ha%20sido%20aprobada%20y%20procesada.`} target="_blank" rel="noreferrer" className="p-1 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] rounded-md border border-[#25D366]/20 flex items-center gap-1" title="Notificar Vía WhatsApp">
+                                      <CheckCheck size={13}/> WA
+                                    </a>
+                                  )}
+                                </>)}
+                              </div>
                             </div>
                           ) : <span className="text-white/20">—</span>}
                         </td>
@@ -702,12 +739,13 @@ export default function AdminDashboard() {
                       <div className="text-left">
                         <p className="font-semibold text-[#00d1ff] text-sm">@{row.username}</p>
                         <p className="text-[10px] text-white/30 mt-0.5">{fmtWCR(row.total_cr)} total · 60% → {fmtWCR(row.user_share_cr)}</p>
+                        <p className="text-[10px] text-[#ff007a] mt-0.5">App (40%): {fmtWCR(row.app_share_cr)} | {fmtBs(row.app_share_bs)}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <p className="text-base font-black text-[#ffd700]">{fmtBs(row.user_payout_bs)}</p>
-                        <p className="text-[10px] text-white/30">{fmtUSD(crToUsd(row.user_share_cr))}</p>
+                        <p className="text-[10px] text-white/30">Usuario (60%)</p>
                       </div>
                       {row.paid
                         ? <span className="text-[10px] text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">✓ Pagado</span>
@@ -749,17 +787,17 @@ export default function AdminDashboard() {
                         <div className="bg-[#e056fd]/5 border border-[#e056fd]/15 rounded-lg px-3 py-2">
                           <p className="text-white/30 text-[10px] mb-0.5">Total gifts</p>
                           <p className="font-bold text-[#e056fd]">{fmtWCR(row.total_cr)}</p>
-                          <p className="text-[10px] text-white/30 mt-0.5">{fmtUSD(crToUsd(row.total_cr))}{bcvRate ? ` · ${fmtBs(crToBs(row.total_cr, bcvRate))}` : ""}</p>
+                          <p className="text-[10px] text-white/30 mt-0.5">{fmtBs(row.total_bs)}</p>
                         </div>
                         <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-lg px-3 py-2">
                           <p className="text-white/30 text-[10px] mb-0.5">60% usuario</p>
                           <p className="font-bold text-emerald-400">{fmtWCR(row.user_share_cr)}</p>
-                          <p className="text-[10px] text-white/30 mt-0.5">{fmtBs(row.user_payout_bs)} · {fmtUSD(crToUsd(row.user_share_cr))}</p>
+                          <p className="text-[10px] text-white/30 mt-0.5">{fmtBs(row.user_payout_bs)}</p>
                         </div>
                         <div className="bg-[#ffd700]/5 border border-[#ffd700]/15 rounded-lg px-3 py-2">
                           <p className="text-white/30 text-[10px] mb-0.5">40% app</p>
                           <p className="font-bold text-[#ffd700]">{fmtWCR(row.app_share_cr)}</p>
-                          <p className="text-[10px] text-white/30 mt-0.5">{fmtUSD(crToUsd(row.app_share_cr))}{bcvRate ? ` · ${fmtBs(crToBs(row.app_share_cr, bcvRate))}` : ""}</p>
+                          <p className="text-[10px] text-white/30 mt-0.5">{fmtBs(row.app_share_bs)}</p>
                         </div>
                       </div>
 

@@ -10,7 +10,10 @@ export function ConnectionManager() {
 
   useEffect(() => {
     const handleVisibilityChange = async () => {
-      if (document.visibilityState === "visible") {
+      if (document.hidden) {
+        console.log("[ConnectionManager] App in background. Killing channels.");
+        await supabase.removeAllChannels();
+      } else {
         console.log("[ConnectionManager] App in foreground. Forcing connection wakeup...");
         
         // 1. Force validate session

@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     if (profile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const body = await req.json();
-    const { transaction_id, user_id, amount_credits, action } = body;
+    const { transaction_id, user_id, amount_credits, action, admin_reference } = body;
 
     if (!transaction_id || !user_id || typeof amount_credits !== "number" || !action) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -37,7 +37,8 @@ export async function POST(req: Request) {
       // 1. Mark as approved
       const { error: txErr } = await supabaseAdmin.from("transactions").update({ 
         status: "approved", 
-        resolved_at: new Date().toISOString() 
+        resolved_at: new Date().toISOString(),
+        admin_reference: admin_reference || null
       }).eq("id", transaction_id);
 
       if (txErr) throw txErr;

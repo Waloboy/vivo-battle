@@ -104,6 +104,14 @@ export default function RankingPage() {
     };
   }, [supabase, wakeCount]);
 
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (loading) {
+      timer = setTimeout(() => setLoading(false), 3000);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
+
   const getMedalColor = (index: number) => {
     if (index === 0) return "#ffd700"; // Oro
     if (index === 1) return "#c0c0c0"; // Plata

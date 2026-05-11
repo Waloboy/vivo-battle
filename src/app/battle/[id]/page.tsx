@@ -414,8 +414,11 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     initBattleData();
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        initBattleData(); // Aggressive refetch on refocus
+      if (document.hidden) {
+        supabase.removeAllChannels();
+        setLivekitToken("");
+      } else {
+        window.location.reload();
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);

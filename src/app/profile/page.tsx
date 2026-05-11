@@ -181,6 +181,14 @@ export default function ProfilePage() {
     setIsUploadingAvatar(false);
   };
 
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (loading) {
+      timer = setTimeout(() => setLoading(false), 3000);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
+
   if (loading) {
     return <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#ff007a]" size={40} /></div>;
   }
