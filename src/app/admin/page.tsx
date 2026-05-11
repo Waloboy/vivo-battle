@@ -9,7 +9,8 @@ import { createClient } from "@/utils/supabase/client";
 import { fmtWCR, fmtBCR, fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
 import { useAuth } from "@/components/AuthProvider";
 
-type Tab = "transactions" | "settlement" | "battle_settlement" | "liquidaciones";
+type Tab = "transactions" | "settlement" | "battle_settlement";
+type TxSubTab = "all" | "recargas" | "retiros_wcr" | "cobros_bcr";
 
 interface SettlementRow {
   user_id: string;
@@ -38,6 +39,7 @@ export default function AdminDashboard() {
   const supabase = createClient();
   const { user: authUser, isAdmin, loading: authLoading } = useAuth();
   const [tab, setTab] = useState<Tab>("transactions");
+  const [txSubTab, setTxSubTab] = useState<TxSubTab>("all");
   const [transactions, setTransactions] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -160,7 +162,7 @@ export default function AdminDashboard() {
       const { data: gifts, error } = await supabase
         .from("transactions")
         .select("user_id, amount_credits, profiles(username, bank_name, id_card, phone_number, whatsapp_number, email)")
-        .in("type", ["gift", "GIFT_SENT"])
+        .in("type", ["gift", "GIFT_SENT", "GIFT"])
         .eq("status", "approved")
         .gte("created_at", weekAgo)
         .abortSignal(controller.signal);
@@ -373,7 +375,7 @@ export default function AdminDashboard() {
   );
 
   const pending = transactions.filter((t: any) => t.status === "pending");
-  const totalGiftsCr = transactions.filter((t: any) => t.type === "gift" || t.type === "GIFT_SENT").reduce((s: any, t: any) => s + (t.amount_credits || 0), 0);
+  const totalGiftsCr = transactions.filter((t: any) => t.type === "gift" || t.type === "GIFT_SENT" || t.type === "GIFT").reduce((s: any, t: any) => s + (t.amount_credits || 0), 0);
   const totalBattleCr = transactions.filter((t: any) => t.type === "battle_win" || t.type === "BATTLE_WIN").reduce((s: any, t: any) => s + (t.amount_credits || 0), 0);
 
   return (
@@ -425,8 +427,8 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* ── Tabs ── */}
-      <div className="flex gap-1 bg-black/30 rounded-xl p-1 w-max border border-white/5">
+      {/* ── Main Tabs ── */}
+      <div className="flex gap-1 bg-black/30 rounded-xl p-1 w-max border border-white/5 flex-wrap">
         <button onClick={() => setTab("transactions")}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === "transactions" ? "bg-white/10 text-white" : "text-white/35 hover:text-white/60"}`}>
           Transacciones
@@ -439,22 +441,39 @@ export default function AdminDashboard() {
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${tab === "battle_settlement" ? "bg-[#00d1ff]/10 text-[#00d1ff] border border-[#00d1ff]/20" : "text-white/35 hover:text-white/60"}`}>
           <Trophy size={13}/> Liquidación BCR
         </button>
-        <button onClick={() => setTab("liquidaciones")}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${tab === "liquidaciones" ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" : "text-white/35 hover:text-white/60"}`}>
-          <Banknote size={13}/> Liquidaciones
-        </button>
       </div>
+
+      {/* ── Sub-tabs for Transactions ── */}
+      {tab === "transactions" && (
+        <div className="flex gap-1 bg-black/20 rounded-lg p-0.5 w-max border border-white/5">
+          {(["all", "recargas", "retiros_wcr", "cobros_bcr"] as TxSubTab[]).map(st => {
+            const labels: Record<TxSubTab, string> = { all: "Todas", recargas: "Recargas", retiros_wcr: "Retiros WCR", cobros_bcr: "Cobros BCR" };
+            const colors: Record<TxSubTab, string> = { all: "text-white", recargas: "text-[#00d1ff]", retiros_wcr: "text-white/70", cobros_bcr: "text-orange-400" };
+            return (
+              <button key={st} onClick={() => setTxSubTab(st)}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${txSubTab === st ? `bg-white/10 ${colors[st]}` : "text-white/30 hover:text-white/50"}`}>
+                {labels[st]}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ══════════════════════════════════════
           TAB: TRANSACTIONS
           Mobile → cards | Desktop → table
       ══════════════════════════════════════ */}
-      {tab === "transactions" && (
+      {tab === "transactions" && (() => {
+        const filteredTxns = txSubTab === "all" ? transactions
+          : txSubTab === "recargas" ? transactions.filter((t: any) => t.type === "DEPOSIT" || t.type === "deposit" || t.type === "DEPOSIT_PENDING")
+          : txSubTab === "retiros_wcr" ? transactions.filter((t: any) => t.type === "WITHDRAW" || t.type === "withdrawal")
+          : transactions.filter((t: any) => t.type === "WITHDRAW_BCR");
+        return (
         <>
           {/* Mobile Cards */}
           <div className="flex flex-col gap-3 md:hidden">
-            {transactions.length === 0 && <p className="text-center text-white/30 text-sm py-6">No hay transacciones.</p>}
-            {transactions.map((txn: any) => {
+            {filteredTxns.length === 0 && <p className="text-center text-white/30 text-sm py-6">No hay transacciones.</p>}
+            {filteredTxns.map((txn: any) => {
               const isProc = processingId === txn.id;
               const prof = txn.profiles;
               return (
@@ -536,9 +555,9 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.length === 0 ? (
+                  {filteredTxns.length === 0 ? (
                     <tr><td colSpan={9} className="p-8 text-center text-white/30">No hay transacciones.</td></tr>
-                  ) : transactions.map((txn: any) => {
+                  ) : filteredTxns.map((txn: any) => {
                     const isProc = processingId === txn.id;
                     const prof = txn.profiles;
                     return (
@@ -596,7 +615,8 @@ export default function AdminDashboard() {
             </div>
           </div>
         </>
-      )}
+        );
+      })()}
 
       {/* ══════════════════════════════════════
           TAB: CORTE SEMANAL
@@ -871,94 +891,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════
-          TAB: LIQUIDACIONES (WITHDRAW_BCR only)
-      ══════════════════════════════════════ */}
-      {tab === "liquidaciones" && (() => {
-        const liqTxns = transactions.filter((t: any) => t.type === "WITHDRAW_BCR");
-        const pendingLiq = liqTxns.filter((t: any) => t.status === "pending");
-        const approvedLiq = liqTxns.filter((t: any) => t.status === "approved");
-        const totalPendingBs = pendingLiq.reduce((s: number, t: any) => s + parseFloat(t.amount_bs || 0), 0);
-        return (
-          <div className="space-y-4">
-            {/* Summary cards */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="cyber-glass rounded-xl p-4 border-white/5 text-center">
-                <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">Pendientes</p>
-                <p className="text-xl font-black text-orange-400">{pendingLiq.length}</p>
-              </div>
-              <div className="cyber-glass rounded-xl p-4 border-white/5 text-center">
-                <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">Aprobadas</p>
-                <p className="text-xl font-black text-emerald-400">{approvedLiq.length}</p>
-              </div>
-              <div className="cyber-glass rounded-xl p-4 border-white/5 text-center">
-                <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">Bs Pendiente</p>
-                <p className="text-xl font-black text-[#ffd700]">{fmtBs(totalPendingBs)}</p>
-              </div>
-            </div>
 
-            {liqTxns.length === 0 ? (
-              <div className="py-10 text-center text-white/30 text-sm">No hay solicitudes de cobro BCR.</div>
-            ) : (
-              <div className="space-y-3">
-                {liqTxns.map((txn: any) => {
-                  const isProc = processingId === txn.id;
-                  const prof = txn.profiles;
-                  return (
-                    <div key={txn.id} className={`cyber-glass rounded-2xl p-4 border overflow-hidden transition-all ${txn.status === "pending" ? "border-orange-500/20" : txn.status === "approved" ? "border-emerald-500/20 opacity-70" : "border-red-500/20 opacity-50"}`}>
-                      {/* Header */}
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <div>
-                          <p className="font-semibold text-sm text-[#00d1ff]">@{prof?.username || "—"}</p>
-                          <p className="text-[10px] text-white/25 mt-0.5">{new Date(txn.created_at).toLocaleDateString("es-VE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-black text-[#ffd700]">{fmtBs(parseFloat(txn.amount_bs || 0))}</p>
-                          <p className="text-xs font-bold text-orange-400">{fmtBCR(txn.amount_credits ?? 0)}</p>
-                        </div>
-                      </div>
-
-                      {/* Separated info blocks */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                        {/* Contact info */}
-                        <div className="bg-[#25D366]/5 rounded-xl p-3 border border-[#25D366]/10">
-                          <p className="text-[#25D366] font-bold text-[9px] uppercase tracking-wider mb-1.5 flex items-center gap-1"><MessageCircle size={9}/> Enviar Comprobante A:</p>
-                          {prof?.whatsapp_number ? (
-                            <a href={`https://wa.me/${prof.whatsapp_number.replace(/\D/g, '')}?text=Hola%20${prof.username},%20tu%20cobro%20BCR%20por%20${fmtBs(parseFloat(txn.amount_bs || 0))}%20ha%20sido%20procesado.`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm text-[#25D366] hover:underline font-medium mb-1">
-                              <Phone size={11}/> {prof.whatsapp_number}
-                            </a>
-                          ) : <span className="text-white/20 text-sm">WA no configurado</span>}
-                          <p className="text-xs text-white/50 flex items-center gap-1"><Mail size={10}/> {prof?.email || "—"}</p>
-                        </div>
-                        {/* Banking info */}
-                        <div className="bg-[#ffd700]/5 rounded-xl p-3 border border-[#ffd700]/10">
-                          <p className="text-[#ffd700] font-bold text-[9px] uppercase tracking-wider mb-1.5 flex items-center gap-1"><Building2 size={9}/> Datos Pago Móvil:</p>
-                          <p className="text-sm font-medium text-white/80">{txn.bank_name || prof?.bank_name || "—"}</p>
-                          <p className="text-xs text-white/50">CI: {prof?.id_card || "—"}</p>
-                          <p className="text-xs text-white/50">Tel: {prof?.phone_number || "—"}</p>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center justify-between">
-                        <StatusBadge status={txn.status}/>
-                        {txn.status === "pending" && (
-                          <div className="flex gap-2">
-                            {isProc ? <Loader2 className="animate-spin" size={18}/> : (<>
-                              <button onClick={() => handleApprove(txn)} className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20 flex items-center gap-1 text-xs font-bold"><CheckCircle2 size={13}/> Aprobar</button>
-                              <button onClick={() => handleReject(txn)} className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg border border-red-500/20" title="Rechazar"><XCircle size={15}/></button>
-                            </>)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })()}
     </div>
   );
 }
