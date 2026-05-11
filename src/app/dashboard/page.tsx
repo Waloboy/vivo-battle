@@ -87,6 +87,17 @@ export default function ExploreDashboard() {
   const [matchmaking, setMatchmaking] = useState(false);
   const [wakeCount, setWakeCount] = useState(0);
 
+  const [showRetry, setShowRetry] = useState(false);
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (loading) {
+      timer = setTimeout(() => setShowRetry(true), 5000);
+    } else {
+      setShowRetry(false);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
+
   useEffect(() => {
     const onWake = () => setWakeCount(c => c + 1);
     window.addEventListener("vivo_wakeup", onWake);
@@ -500,9 +511,16 @@ export default function ExploreDashboard() {
       {/* ── Loading State ── */}
       {loading && (
         <div className="flex items-center justify-center py-20">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="animate-spin text-[#ff007a]" size={36} />
-            <span className="text-white/30 text-xs font-medium">Cargando batallas...</span>
+          <div className="flex flex-col items-center gap-4">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="animate-spin text-[#ff007a]" size={36} />
+              <span className="text-white/30 text-xs font-medium">Cargando batallas...</span>
+            </div>
+            {showRetry && (
+              <button onClick={() => window.location.reload()} className="px-4 py-2 bg-[#ff007a]/20 hover:bg-[#ff007a]/30 text-[#ff007a] rounded-xl text-sm font-bold border border-[#ff007a]/30 transition-colors">
+                Reintentar
+              </button>
+            )}
           </div>
         </div>
       )}

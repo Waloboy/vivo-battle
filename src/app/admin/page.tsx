@@ -340,8 +340,30 @@ export default function AdminDashboard() {
     else alert("Tasa BCV actualizada correctamente.");
   };
 
+  const [showRetry, setShowRetry] = useState(false);
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (authLoading || (isAdmin && dataLoading)) {
+      timer = setTimeout(() => setShowRetry(true), 5000);
+    } else {
+      setShowRetry(false);
+    }
+    return () => clearTimeout(timer);
+  }, [authLoading, isAdmin, dataLoading]);
+
   // ── Guards ──
-  if (authLoading || (isAdmin && dataLoading)) return <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#ff007a]" size={40}/></div>;
+  if (authLoading || (isAdmin && dataLoading)) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-4">
+        <Loader2 className="animate-spin text-[#ff007a]" size={40}/>
+        {showRetry && (
+          <button onClick={() => window.location.reload()} className="px-4 py-2 bg-[#ff007a]/20 hover:bg-[#ff007a]/30 text-[#ff007a] rounded-xl text-sm font-bold border border-[#ff007a]/30 transition-colors">
+            Reintentar
+          </button>
+        )}
+      </div>
+    );
+  }
   if (!isAdmin) return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
       <ShieldAlert className="text-red-500" size={56}/>
@@ -435,7 +457,7 @@ export default function AdminDashboard() {
                 <div key={txn.id} className="cyber-glass rounded-2xl p-4 border border-white/5 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "text-[#00d1ff]" : txn.type === "gift" || txn.type === "GIFT_SENT" ? "text-[#e056fd]" : txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" : "text-white/50"}`}>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "text-[#00d1ff]" : txn.type === "gift" || txn.type === "GIFT_SENT" ? "text-[#e056fd]" : txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" : txn.type === "WITHDRAW_BCR" ? "text-orange-400" : "text-white/50"}`}>
                         {txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "Recarga" : txn.type === "gift" || txn.type === "GIFT_SENT" ? "Gift" : txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "Batalla" : txn.type === "WITHDRAW_BCR" ? "Cobro BCR" : "Retiro WCR"}
                       </span>
                       <p className="font-semibold text-sm mt-0.5">@{prof?.username || "—"}</p>
@@ -453,13 +475,15 @@ export default function AdminDashboard() {
                       <p className="text-white/30 font-light">Monto BS</p>
                       <p className="font-bold">{fmtBs(parseFloat(txn.amount_bs || 0))}</p>
                     </div>
-                    <div>
-                      <p className="text-white/30 font-light">Banco</p>
-                      <p className="font-medium">{prof?.bank_name || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="text-white/30 font-light">Referencia</p>
-                      <p className="font-mono">{txn.reference_number || "—"}</p>
+                    <div className="col-span-2 space-y-1 mt-1 border-t border-white/5 pt-2">
+                      <p className="text-white/30 font-light text-[10px] uppercase">Datos del Usuario</p>
+                      <div className="grid grid-cols-2 gap-1 text-[11px]">
+                        <p><span className="text-white/40">Banco:</span> {txn.bank_name || prof?.bank_name || "—"}</p>
+                        <p><span className="text-white/40">Cédula:</span> {prof?.id_card || "—"}</p>
+                        <p><span className="text-white/40">Tel:</span> {prof?.phone_number || "—"}</p>
+                        <p><span className="text-white/40">WA:</span> {prof?.whatsapp_number || "—"}</p>
+                        <p className="col-span-2"><span className="text-white/40">Email:</span> {prof?.email || "—"}</p>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
@@ -505,7 +529,7 @@ export default function AdminDashboard() {
                     return (
                       <tr key={txn.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                         <td className="px-4 py-3">
-                          <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "text-[#00d1ff]" : (txn.type === "gift" || txn.type === "GIFT_SENT" ? "text-[#e056fd]" : (txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" : "text-white/50"))}`}>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest ${txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "text-[#00d1ff]" : (txn.type === "gift" || txn.type === "GIFT_SENT" ? "text-[#e056fd]" : (txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "text-[#ffd700]" : txn.type === "WITHDRAW_BCR" ? "text-orange-400" : "text-white/50"))}`}>
                             {txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING" ? "Depósito" : (txn.type === "gift" || txn.type === "GIFT_SENT" ? "Gift" : (txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? "Batalla" : txn.type === "WITHDRAW_BCR" ? "Cobro BCR" : "Retiro WCR"))}
                           </span>
                         </td>

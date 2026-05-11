@@ -162,7 +162,29 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
     else { setSuccessMsg("¡Cobro solicitado! Espera la aprobación del Admin."); setWithdrawAmount(""); fetchData(); }
   };
 
-  if (loading) return <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#ff007a]" size={40} /></div>;
+  const [showRetry, setShowRetry] = useState(false);
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (loading) {
+      timer = setTimeout(() => setShowRetry(true), 5000);
+    } else {
+      setShowRetry(false);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-4">
+        <Loader2 className="animate-spin text-[#ff007a]" size={40} />
+        {showRetry && (
+          <button onClick={() => window.location.reload()} className="px-4 py-2 bg-[#ff007a]/20 hover:bg-[#ff007a]/30 text-[#ff007a] rounded-xl text-sm font-bold border border-[#ff007a]/30 transition-colors">
+            Reintentar
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 max-w-4xl w-full mx-auto p-4 md:p-8 space-y-6">
@@ -276,11 +298,12 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
                 <div className="min-w-0">
                   <p className="font-medium text-sm truncate">
                     {txn.type === "GIFT_SENT" || txn.type === "gift" ? (txn.reference_number || "Envío de Regalo") :
-                     txn.type === "WITHDRAW" || txn.type === "withdrawal" ? "Retiro de Ganancias" : 
+                     txn.type === "WITHDRAW" || txn.type === "withdrawal" ? "Retiro de Billetera (WCR)" : 
+                     txn.type === "WITHDRAW_BCR" ? "Solicitud de Ganancias (BCR)" : 
                      txn.type === "BATTLE_WIN" || txn.type === "battle_win" ? (txn.reference_number || "BATALLA GANADA") :
                      txn.type === "bonus" ? "Bono / Recompensa" :
                      txn.type === "manual_adjustment" ? "Ajuste de Saldo" :
-                     "Depósito / Pago Móvil"}
+                     "Recarga de Saldo"}
                   </p>
                   <p className="text-[11px] text-white/30">
                     {new Date(txn.created_at).toLocaleDateString("es-VE")} ·{" "}

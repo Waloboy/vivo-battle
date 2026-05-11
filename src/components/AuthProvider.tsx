@@ -55,33 +55,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       supabase.auth.getUser().then((res: UserResponse) => {
         if (res.data?.user) {
           setUser(res.data.user);
-        } else {
+        } else if (res.error) {
           // Token was invalid — clear state
           setUser(null);
           setProfile(null);
           setIsAdmin(false);
         }
-      }).catch(() => {
+      }).catch((e: any) => {
+        console.warn("Background auth validation failed:", e);
         // Network error — keep local session, don't block
       });
     } else {
       // No local session — try server validation once
       try {
-        const { data } = await supabase.auth.getUser();
-        if (data.user) {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) throw error;
+        if (data?.user) {
           setUser(data.user);
-          await fetchProfile(data.user.id);
+          await fetchProfile(data.user.id).catch(e => console.warn("Failed to fetch profile", e));
         } else {
           setUser(null);
           setProfile(null);
           setIsAdmin(false);
         }
-      } catch {
+      } catch (e) {
+        console.warn("Failed to get user:", e);
         setUser(null);
         setProfile(null);
         setIsAdmin(false);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
   }, [supabase, fetchProfile]);
 
@@ -107,14 +111,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        refreshAuth();
+        refreshAuth().catch(e => console.warn("Visibility refresh failed:", e));
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
+    // Timeout safety: if loading doesn't resolve in 5 seconds, force it.
+    const fallbackTimeout = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
+
     return () => {
       authListener.subscription.unsubscribe();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearTimeout(fallbackTimeout);
     };
   }, [supabase, refreshAuth, fetchProfile]);
 
