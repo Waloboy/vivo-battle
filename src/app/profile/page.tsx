@@ -249,9 +249,7 @@ export default function ProfilePage() {
     return () => clearTimeout(timer);
   }, [loading]);
 
-  if (loading) {
-    return <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#ff007a]" size={40} /></div>;
-  }
+  // Never block the full screen. If loading, show skeleton inline.
 
   const balanceUsd = balance / 100;
   const balanceBs = bcvRate ? (balance / 100) * bcvRate : null;
@@ -301,8 +299,16 @@ export default function ProfilePage() {
               </div>
 
               <div>
-                <h1 className="text-2xl font-black text-white">@{profile?.username || "usuario"}</h1>
-                <p className="text-white/40 text-sm font-medium">{profile?.full_name || "VIVO User"}</p>
+                {profile?.username ? (
+                  <h1 className="text-2xl font-black text-white">@{profile.username}</h1>
+                ) : (
+                  <div className="h-7 w-36 bg-white/10 rounded-lg animate-pulse mb-1" />
+                )}
+                {profile?.full_name ? (
+                  <p className="text-white/40 text-sm font-medium">{profile.full_name}</p>
+                ) : (
+                  <div className="h-4 w-24 bg-white/5 rounded animate-pulse" />
+                )}
               </div>
 
               {/* ── Social Stats ── */}

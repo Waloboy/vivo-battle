@@ -185,28 +185,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // ── Nuclear Visibility Fix: reload ONCE if background > 30s ──
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        hiddenAtRef.current = Date.now();
-      } else if (document.visibilityState === "visible") {
-        const hiddenAt = hiddenAtRef.current;
-        hiddenAtRef.current = null;
-        
-        if (hiddenAt && (Date.now() - hiddenAt) > 30_000) {
-          // Check if we haven't already reloaded in this session for this reason
-          if (!sessionStorage.getItem("vivo_bg_reloaded")) {
-            sessionStorage.setItem("vivo_bg_reloaded", "true");
-            router.refresh();
-            return;
-          }
-        }
-        // Quick return — just refresh auth silently
-        refreshAuth().catch(e => console.warn("Visibility refresh failed:", e));
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
     // Timeout safety: if loading doesn't resolve in 3 seconds, force it.
     const fallbackTimeout = setTimeout(() => {
       setLoading(false);
@@ -214,7 +192,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       authListener.subscription.unsubscribe();
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearTimeout(fallbackTimeout);
     };
   }, [supabase, refreshAuth, fetchProfile, hardReset]);
