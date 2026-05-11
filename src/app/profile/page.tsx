@@ -302,12 +302,12 @@ export default function ProfilePage() {
                 {profile?.username ? (
                   <h1 className="text-2xl font-black text-white">@{profile.username}</h1>
                 ) : (
-                  <div className="h-7 w-36 bg-white/10 rounded-lg animate-pulse mb-1" />
+                  <h1 className="text-2xl font-black text-white/50 animate-pulse">Cargando...</h1>
                 )}
                 {profile?.full_name ? (
                   <p className="text-white/40 text-sm font-medium">{profile.full_name}</p>
                 ) : (
-                  <div className="h-4 w-24 bg-white/5 rounded animate-pulse" />
+                  <p className="text-white/20 text-sm font-medium">...</p>
                 )}
               </div>
 

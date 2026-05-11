@@ -64,6 +64,23 @@ function RoomWatcher({ playerA, playerB, onBothConnected, onOpponentGhost }: {
   return null;
 }
 
+function RoomDisconnectOnHide() {
+  const room = useRoomContext();
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (room && room.state !== "disconnected") {
+          console.log("[LiveKit] Disconnecting room on hide");
+          room.disconnect();
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [room]);
+  return null;
+}
+
 interface BattleVideoProps {
   expectedUsername: string;
   phase: BattlePhase;
@@ -415,10 +432,21 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        supabase.removeAllChannels();
-        setLivekitToken("");
+        // Stop fetching tokens or trying to reconnect
       } else {
-        window.location.reload();
+        // Re-fetch token only if we don't have one
+        if (!livekitToken) {
+           // It will trigger on next update
+           const fetchLkToken = async () => {
+             const { data: { session } } = await supabase.auth.getSession();
+             if (session?.user?.id) {
+               const res = await fetch(`/api/livekit/token?room=${id}&username=${profile?.username || session.user.id}`);
+               const data = await res.json();
+               if (data.token) setLivekitToken(data.token);
+             }
+           };
+           fetchLkToken();
+        }
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -842,6 +870,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         audio={true}
         className="flex flex-col flex-[4] min-h-0 relative"
       >
+        <RoomDisconnectOnHide />
         <RoomWatcher playerA={playerA?.username} playerB={playerB?.username} onBothConnected={setBothConnected} onOpponentGhost={setIsOpponentGhost} />
         
         {/* GLOBAL PANORAMIC OVERLAY FOR PREPARING — latched, never re-shows */}
