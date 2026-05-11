@@ -28,7 +28,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("vivo_is_admin") === "true";
+    }
+    return false;
+  });
   const [loading, setLoading] = useState(true);
   const didInit = useRef(false);
 
@@ -44,7 +49,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
       if (data) {
         setProfile(data);
-        setIsAdmin(data.role === "admin");
+        const adminFlag = data.role === "admin";
+        setIsAdmin(adminFlag);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("vivo_is_admin", String(adminFlag));
+        }
       }
     } catch (e) {
       console.warn("fetchProfile failed:", e);
@@ -158,34 +167,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
           setProfile(null);
           setIsAdmin(false);
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("vivo_is_admin");
+          }
         }
         setLoading(false);
       }
     );
 
-    // ── Nuclear Visibility Fix: full reload on return ──
+    // ── Nuclear Visibility Fix: reload ONCE if background > 30s ──
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         hiddenAtRef.current = Date.now();
       } else if (document.visibilityState === "visible") {
         const hiddenAt = hiddenAtRef.current;
         hiddenAtRef.current = null;
-        // If was hidden for more than 5 seconds, nuke everything
-        if (hiddenAt && (Date.now() - hiddenAt) > 5_000) {
-          window.location.reload();
-          return;
+        
+        if (hiddenAt && (Date.now() - hiddenAt) > 30_000) {
+          // Check if we haven't already reloaded in this session for this reason
+          if (!sessionStorage.getItem("vivo_bg_reloaded")) {
+            sessionStorage.setItem("vivo_bg_reloaded", "true");
+            window.location.reload();
+            return;
+          }
         }
-        // Quick return (<5s) — just refresh auth silently
+        // Quick return — just refresh auth silently
         refreshAuth().catch(e => console.warn("Visibility refresh failed:", e));
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    // Timeout safety: if loading doesn't resolve in 4 seconds, force it.
+    // Timeout safety: if loading doesn't resolve in 3 seconds, force it.
     const fallbackTimeout = setTimeout(() => {
-      // If we're still stuck loading after 4s, clear cache and do a hard reload
-      window.location.replace(window.location.pathname);
-    }, 4000);
+      setLoading(false);
+    }, 3000);
 
     return () => {
       authListener.subscription.unsubscribe();

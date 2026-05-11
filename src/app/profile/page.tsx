@@ -111,7 +111,7 @@ export default function ProfilePage() {
       .from("transactions")
       .select("id, amount_credits, amount_bs, created_at, type, status, admin_reference")
       .eq("user_id", user.id)
-      .in("type", ["GIFT", "BATTLE_REWARD", "BATTLE_WIN", "battle_win", "gift", "GIFT_SENT"])
+      .in("type", ["GIFT", "BATTLE_REWARD", "BATTLE_WIN"])
       .eq("status", "approved")
       .order("created_at", { ascending: false })
       .limit(50);
