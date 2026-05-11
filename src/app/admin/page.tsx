@@ -97,35 +97,11 @@ export default function AdminDashboard() {
       const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s Timeout
       
       let { data, error } = await supabase
-        .from('transactions')
-        .select('*, profiles!fk_user(username, bank_name, id_card, phone_number, whatsapp_number, email)')
+        .from('admin_dashboard_stats')
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(200)
         .abortSignal(controller.signal);
-
-      if (error && error.code === 'PGRST201') {
-        console.warn("PGRST201: Intentando con transactions_user_id_fkey...");
-        const res2 = await supabase
-          .from('transactions')
-          .select('*, profiles!transactions_user_id_fkey(username, bank_name, id_card, phone_number, whatsapp_number, email)')
-          .order('created_at', { ascending: false })
-          .limit(200)
-          .abortSignal(controller.signal);
-        data = res2.data;
-        error = res2.error;
-      }
-
-      if (error && error.code === 'PGRST201') {
-        console.warn("PGRST201: Fallback de seguridad a select('*') sin profiles...");
-        const res3 = await supabase
-          .from('transactions')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(200)
-          .abortSignal(controller.signal);
-        data = res3.data;
-        error = res3.error;
-      }
 
       clearTimeout(timeoutId);
 
@@ -162,8 +138,8 @@ export default function AdminDashboard() {
       const timeoutId = setTimeout(() => controller.abort(), 3000);
       
       const { data: gifts, error } = await supabase
-        .from("transactions")
-        .select("user_id, amount_credits, amount_bs, profiles(username, bank_name, id_card, phone_number, whatsapp_number, email)")
+        .from("admin_dashboard_stats")
+        .select("user_id, amount_credits, amount_bs, username, bank_name, id_card, phone_number, whatsapp_number, email")
         .in("type", ["gift", "GIFT_SENT", "GIFT"])
         .eq("status", "approved")
         .abortSignal(controller.signal);
@@ -175,11 +151,10 @@ export default function AdminDashboard() {
 
       const map = new Map<string, SettlementRow>();
       for (const g of gifts) {
-        const p = g.profiles as any;
         if (!map.has(g.user_id)) {
           map.set(g.user_id, {
-            user_id: g.user_id, username: p?.username || "—",
-            bank_name: p?.bank_name || null, id_card: p?.id_card || null, phone_number: p?.phone_number || null,
+            user_id: g.user_id, username: g.username || "—",
+            bank_name: g.bank_name || null, id_card: g.id_card || null, phone_number: g.phone_number || null,
             total_cr: 0, user_share_cr: 0, app_share_cr: 0, user_payout_bs: 0,
             total_bs: 0, app_share_bs: 0,
             paid: false, expanded: false,
@@ -224,8 +199,8 @@ export default function AdminDashboard() {
       const timeoutId = setTimeout(() => controller.abort(), 3000);
 
       const { data: wins, error } = await supabase
-        .from("transactions")
-        .select("user_id, amount_credits, opponent_id, battle_id, created_at, reference_number, profiles(username, bank_name, id_card, phone_number, whatsapp_number, email)")
+        .from("admin_dashboard_stats")
+        .select("user_id, amount_credits, opponent_id, battle_id, created_at, reference_number, username, bank_name, id_card, phone_number, whatsapp_number, email")
         .in("type", ["battle_win", "BATTLE_WIN"])
         .eq("status", "approved")
         .abortSignal(controller.signal);
@@ -238,11 +213,10 @@ export default function AdminDashboard() {
 
       const map = new Map<string, SettlementRow>();
       for (const w of wins) {
-        const p = w.profiles as any;
         if (!map.has(w.user_id)) {
           map.set(w.user_id, {
-            user_id: w.user_id, username: p?.username || "—",
-            bank_name: p?.bank_name || null, id_card: p?.id_card || null, phone_number: p?.phone_number || null,
+            user_id: w.user_id, username: w.username || "—",
+            bank_name: w.bank_name || null, id_card: w.id_card || null, phone_number: w.phone_number || null,
             total_cr: 0, user_share_cr: 0, app_share_cr: 0, user_payout_bs: 0,
             total_bs: 0, app_share_bs: 0,
             paid: false, expanded: false,
@@ -310,7 +284,7 @@ export default function AdminDashboard() {
         const amountBs = txn.amount_bs || '0';
         if (waNumber) {
           const msg = encodeURIComponent(
-            `Hola ${username}, tu solicitud en VIVO BATTLE ha sido procesada. Monto: ${amountBs} Bs. Ref: ${adminRef}.`
+            `Hola, tu pago de ${amountBs} Bs ha sido enviado. Ref: ${adminRef}.`
           );
           window.open(`https://wa.me/${waNumber}?text=${msg}`, '_blank');
         }
@@ -502,7 +476,7 @@ export default function AdminDashboard() {
             {filteredTxns.length === 0 && <p className="text-center text-white/30 text-sm py-6">No hay transacciones.</p>}
             {filteredTxns.map((txn: any) => {
               const isProc = processingId === txn.id;
-              const prof = txn.profiles;
+              const prof = txn;
               return (
                 <div key={txn.id} className="cyber-glass rounded-2xl p-4 border border-white/5 space-y-3">
                   <div className="flex items-start justify-between gap-2">
@@ -607,7 +581,7 @@ export default function AdminDashboard() {
                     <tr><td colSpan={9} className="p-8 text-center text-white/30">No hay transacciones.</td></tr>
                   ) : filteredTxns.map((txn: any) => {
                     const isProc = processingId === txn.id;
-                    const prof = txn.profiles;
+                    const prof = txn;
                     return (
                       <tr key={txn.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                         <td className="px-4 py-3">

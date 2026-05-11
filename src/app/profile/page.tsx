@@ -111,7 +111,7 @@ export default function ProfilePage() {
       .from("transactions")
       .select("id, amount_credits, amount_bs, created_at, type, status, admin_reference")
       .eq("user_id", user.id)
-      .in("type", ["BATTLE_WIN", "battle_win", "GIFT", "gift", "GIFT_SENT", "bonus", "BONUS"])
+      .in("type", ["GIFT", "BATTLE_REWARD", "BATTLE_WIN", "battle_win", "gift", "GIFT_SENT"])
       .eq("status", "approved")
       .order("created_at", { ascending: false })
       .limit(50);
@@ -561,7 +561,22 @@ export default function ProfilePage() {
                   />
                 </div>
               </div>
+            </div>
+          </div>
 
+          {/* ══════════════════════════════════════
+              BLOQUE 1.5: DATOS DE CONTACTO
+          ══════════════════════════════════════ */}
+          <div className="cyber-glass rounded-3xl p-6 border-white/5 mt-6">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="p-2 rounded-xl bg-[#25D366]/10"><Phone size={18} className="text-[#25D366]" /></div>
+              <div>
+                <h2 className="text-lg font-black text-white">Datos de Contacto</h2>
+                <p className="text-[10px] text-white/30 uppercase tracking-wider">Para confirmaciones de pagos</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">WhatsApp</label>
                 <div className="relative">
@@ -582,7 +597,7 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Correo Electrónico (Zelle/PayPal)</label>
+                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Correo Electrónico</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <FileText size={16} className="text-white/40" />

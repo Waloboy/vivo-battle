@@ -183,7 +183,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Timeout safety: if loading doesn't resolve in 4 seconds, force it.
     const fallbackTimeout = setTimeout(() => {
-      setLoading(false);
+      // If we're still stuck loading after 4s, clear cache and do a hard reload
+      window.location.replace(window.location.pathname);
     }, 4000);
 
     return () => {
