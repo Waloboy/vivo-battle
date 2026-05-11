@@ -302,6 +302,18 @@ export default function AdminDashboard() {
         const { error } = await res.json();
         console.error("Approve failed:", error);
         alert("Error al aprobar: " + error);
+      } else {
+        // ── Auto-open WhatsApp with payment confirmation ──
+        const prof = txn.profiles;
+        const waNumber = prof?.whatsapp_number?.replace(/\D/g, '') || '';
+        const username = prof?.username || 'usuario';
+        const amountBs = txn.amount_bs || '0';
+        if (waNumber) {
+          const msg = encodeURIComponent(
+            `Hola ${username}, tu solicitud en VIVO BATTLE ha sido procesada. Monto: ${amountBs} Bs. Ref: ${adminRef}.`
+          );
+          window.open(`https://wa.me/${waNumber}?text=${msg}`, '_blank');
+        }
       }
     } catch (e) {
       console.error("Approve exception:", e);
@@ -380,7 +392,11 @@ export default function AdminDashboard() {
 
   const pending = transactions.filter((t: any) => t.status === "pending");
   const totalGiftsCr = transactions.filter((t: any) => t.type === "gift" || t.type === "GIFT_SENT" || t.type === "GIFT").reduce((s: any, t: any) => s + (t.amount_credits || 0), 0);
+  const totalGiftsBs = transactions.filter((t: any) => t.type === "gift" || t.type === "GIFT_SENT" || t.type === "GIFT").reduce((s: any, t: any) => s + parseFloat(t.amount_bs || 0), 0);
   const totalBattleCr = transactions.filter((t: any) => t.type === "battle_win" || t.type === "BATTLE_WIN").reduce((s: any, t: any) => s + (t.amount_credits || 0), 0);
+  const totalBattleBs = transactions.filter((t: any) => t.type === "battle_win" || t.type === "BATTLE_WIN").reduce((s: any, t: any) => s + parseFloat(t.amount_bs || 0), 0);
+  const totalDepositsCr = transactions.filter((t: any) => t.type === "DEPOSIT" || t.type === "deposit" || t.type === "DEPOSIT_PENDING").reduce((s: any, t: any) => s + (t.amount_credits || 0), 0);
+  const totalDepositsBs = transactions.filter((t: any) => t.type === "DEPOSIT" || t.type === "deposit" || t.type === "DEPOSIT_PENDING").reduce((s: any, t: any) => s + parseFloat(t.amount_bs || 0), 0);
 
   return (
     <div className="flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto space-y-5">
@@ -399,10 +415,17 @@ export default function AdminDashboard() {
           <div className="cyber-glass px-3 py-2 rounded-xl border-white/5 text-center min-w-[70px]">
             <span className="block text-white/30 text-[10px] uppercase">Gifts (CR)</span>
             <span className="text-base font-bold text-[#e056fd]">{totalGiftsCr.toLocaleString("es-VE")}</span>
+            <span className="block text-[9px] text-white/20">{fmtBs(totalGiftsBs)}</span>
           </div>
           <div className="cyber-glass px-3 py-2 rounded-xl border-white/5 text-center min-w-[70px]">
             <span className="block text-white/30 text-[10px] uppercase">BCR</span>
             <span className="text-base font-bold text-[#00d1ff]">{totalBattleCr.toLocaleString("es-VE")}</span>
+            <span className="block text-[9px] text-white/20">{fmtBs(totalBattleBs)}</span>
+          </div>
+          <div className="cyber-glass px-3 py-2 rounded-xl border-white/5 text-center min-w-[70px]">
+            <span className="block text-white/30 text-[10px] uppercase">Depósitos</span>
+            <span className="text-base font-bold text-emerald-400">{totalDepositsCr.toLocaleString("es-VE")}</span>
+            <span className="block text-[9px] text-white/20">{fmtBs(totalDepositsBs)}</span>
           </div>
           {bcvRate !== null && (
             <div className="cyber-glass px-3 py-2 rounded-xl border border-[#ffd700]/30 flex items-center gap-3">

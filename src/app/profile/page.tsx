@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { User, MapPin, Building2, Loader2, Save, CheckCircle2, Phone, FileText, Edit2, ArrowLeft, CreditCard, History, Sparkles, TrendingUp, Users, UserCheck, UserPlus, Camera, Trophy, X, Swords } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/utils/supabase/client";
 import { fmtWCR, fmtBCR, fmtUSD, fmtBs } from "@/utils/format";
 import { getUserBalance, getDualBalance, type DualBalance } from "../../utils/balance";
@@ -30,6 +30,13 @@ export default function ProfilePage() {
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [battlesCount, setBattlesCount] = useState(0);
+
+  // Modal state
+  const [earningsModal, setEarningsModal] = useState(false);
+  const [txModal, setTxModal] = useState(false);
+  const [earningsData, setEarningsData] = useState<any[]>([]);
+  const [txData, setTxData] = useState<any[]>([]);
+  const [modalLoading, setModalLoading] = useState(false);
 
   const supabase = createClient();
 
@@ -92,6 +99,40 @@ export default function ProfilePage() {
       setBattlesCount(battlesRes.count || 0);
     }
     setLoading(false);
+  };
+
+  // ── Open Earnings Modal ──
+  const openEarningsModal = async () => {
+    setEarningsModal(true);
+    setModalLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setModalLoading(false); return; }
+    const { data } = await supabase
+      .from("transactions")
+      .select("id, amount_credits, amount_bs, created_at, type, status, admin_reference")
+      .eq("user_id", user.id)
+      .in("type", ["BATTLE_WIN", "battle_win", "GIFT", "gift", "GIFT_SENT", "bonus", "BONUS"])
+      .eq("status", "approved")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    setEarningsData(data || []);
+    setModalLoading(false);
+  };
+
+  // ── Open Transactions Modal ──
+  const openTxModal = async () => {
+    setTxModal(true);
+    setModalLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setModalLoading(false); return; }
+    const { data } = await supabase
+      .from("transactions")
+      .select("id, amount_credits, amount_bs, created_at, type, status, reference_number, admin_reference")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    setTxData(data || []);
+    setModalLoading(false);
   };
 
   useEffect(() => {
@@ -197,6 +238,7 @@ export default function ProfilePage() {
   const balanceBs = bcvRate ? (balance / 100) * bcvRate : null;
 
   return (
+    <>
     <div className="flex-1 max-w-2xl w-full mx-auto p-4 md:p-8 pb-24">
       <input 
         id="profile-avatar-upload"
@@ -381,9 +423,9 @@ export default function ProfilePage() {
 
           {/* Main Actions */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <a 
-              href="/wallet"
-              className="flex items-center justify-between p-5 cyber-glass rounded-2xl border-white/5 hover:bg-white/5 transition-all group"
+            <button 
+              onClick={openEarningsModal}
+              className="flex items-center justify-between p-5 cyber-glass rounded-2xl border-white/5 hover:bg-white/5 transition-all group w-full text-left"
             >
               <div className="flex items-center gap-4">
                 <div className="p-3 rounded-xl bg-[#ff007a]/10 text-[#ff007a]">
@@ -397,11 +439,11 @@ export default function ProfilePage() {
               <div className="opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
                 <ArrowLeft size={16} className="rotate-180" />
               </div>
-            </a>
+            </button>
 
-            <a 
-              href="/wallet"
-              className="flex items-center justify-between p-5 cyber-glass rounded-2xl border-white/5 hover:bg-white/5 transition-all group"
+            <button 
+              onClick={openTxModal}
+              className="flex items-center justify-between p-5 cyber-glass rounded-2xl border-white/5 hover:bg-white/5 transition-all group w-full text-left"
             >
               <div className="flex items-center gap-4">
                 <div className="p-3 rounded-xl bg-[#00d1ff]/10 text-[#00d1ff]">
@@ -415,7 +457,7 @@ export default function ProfilePage() {
               <div className="opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
                 <ArrowLeft size={16} className="rotate-180" />
               </div>
-            </a>
+            </button>
           </div>
 
           <button 
@@ -651,5 +693,164 @@ export default function ProfilePage() {
         </div>
       )}
     </div>
+
+      {/* ═══════════════════════════════════════
+          MODAL: MIS GANANCIAS
+         ═══════════════════════════════════════ */}
+      <AnimatePresence>
+        {earningsModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setEarningsModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="w-full max-w-lg max-h-[80vh] bg-[#0d0d0d] border border-white/10 rounded-3xl overflow-hidden shadow-[0_0_60px_rgba(255,0,122,0.15)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-[#ff007a]/10"><Sparkles size={18} className="text-[#ff007a]" /></div>
+                  <div>
+                    <h2 className="text-base font-black text-white">Mis Ganancias</h2>
+                    <p className="text-[10px] text-white/30 uppercase tracking-wider">BCR: {fmtBCR(dualBal.battle_credits)}</p>
+                  </div>
+                </div>
+                <button onClick={() => setEarningsModal(false)} className="p-2 rounded-xl hover:bg-white/5 transition-colors"><X size={18} className="text-white/40" /></button>
+              </div>
+
+              {/* Content */}
+              <div className="overflow-y-auto max-h-[65vh] p-4 space-y-2">
+                {modalLoading ? (
+                  <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-[#ff007a]" size={28} /></div>
+                ) : earningsData.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Trophy size={32} className="text-white/10 mb-3" />
+                    <p className="text-white/25 text-sm">Aún no tienes ganancias registradas.</p>
+                  </div>
+                ) : earningsData.map((txn: any) => (
+                  <div key={txn.id} className="flex items-center justify-between bg-black/30 rounded-xl px-4 py-3 border border-white/5">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${
+                        txn.type.includes("BATTLE") || txn.type.includes("battle") ? "bg-[#ffd700]/10 border-[#ffd700]/20" : "bg-[#e056fd]/10 border-[#e056fd]/20"
+                      }`}>
+                        {txn.type.includes("BATTLE") || txn.type.includes("battle") ? <Trophy size={14} className="text-[#ffd700]" /> : <Sparkles size={14} className="text-[#e056fd]" />}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-white/80">
+                          {txn.type.includes("BATTLE") || txn.type.includes("battle") ? "Victoria" : "Gift recibido"}
+                        </p>
+                        <p className="text-[10px] text-white/25">
+                          {new Date(txn.created_at).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: '2-digit' })}
+                          {' '}
+                          {new Date(txn.created_at).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-sm font-black ${txn.type.includes("BATTLE") || txn.type.includes("battle") ? "text-[#ffd700]" : "text-[#e056fd]"}`}>
+                        +{fmtWCR(txn.amount_credits || 0)}
+                      </span>
+                      {txn.amount_bs && parseFloat(txn.amount_bs) > 0 && (
+                        <p className="text-[10px] text-white/25">{fmtBs(parseFloat(txn.amount_bs))}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ═══════════════════════════════════════
+          MODAL: TRANSACCIONES
+         ═══════════════════════════════════════ */}
+      <AnimatePresence>
+        {txModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setTxModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="w-full max-w-lg max-h-[80vh] bg-[#0d0d0d] border border-white/10 rounded-3xl overflow-hidden shadow-[0_0_60px_rgba(0,209,255,0.15)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-[#00d1ff]/10"><History size={18} className="text-[#00d1ff]" /></div>
+                  <div>
+                    <h2 className="text-base font-black text-white">Transacciones</h2>
+                    <p className="text-[10px] text-white/30 uppercase tracking-wider">Recargas, Retiros y Movimientos</p>
+                  </div>
+                </div>
+                <button onClick={() => setTxModal(false)} className="p-2 rounded-xl hover:bg-white/5 transition-colors"><X size={18} className="text-white/40" /></button>
+              </div>
+
+              {/* Content */}
+              <div className="overflow-y-auto max-h-[65vh] p-4 space-y-2">
+                {modalLoading ? (
+                  <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-[#00d1ff]" size={28} /></div>
+                ) : txData.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <History size={32} className="text-white/10 mb-3" />
+                    <p className="text-white/25 text-sm">Sin transacciones aún.</p>
+                  </div>
+                ) : txData.map((txn: any) => {
+                  const isDeposit = txn.type === "DEPOSIT" || txn.type === "deposit" || txn.type === "DEPOSIT_PENDING";
+                  const isWithdraw = txn.type === "WITHDRAW" || txn.type === "withdrawal" || txn.type === "WITHDRAW_BCR";
+                  const isGift = txn.type === "gift" || txn.type === "GIFT_SENT" || txn.type === "GIFT";
+                  const isBattle = txn.type === "BATTLE_WIN" || txn.type === "battle_win";
+                  const color = isDeposit ? "text-[#00d1ff]" : isWithdraw ? "text-white/60" : isGift ? "text-[#e056fd]" : isBattle ? "text-[#ffd700]" : "text-white/50";
+                  const label = isDeposit ? "Recarga" : isWithdraw ? (txn.type === "WITHDRAW_BCR" ? "Cobro BCR" : "Retiro WCR") : isGift ? "Gift" : isBattle ? "Victoria" : txn.type;
+                  const sign = isWithdraw || txn.type === "GIFT_SENT" ? "-" : "+";
+
+                  return (
+                    <div key={txn.id} className="flex items-center justify-between bg-black/30 rounded-xl px-4 py-3 border border-white/5">
+                      <div>
+                        <p className={`text-xs font-bold uppercase tracking-wider ${color}`}>{label}</p>
+                        <p className="text-[10px] text-white/25 mt-0.5">
+                          {new Date(txn.created_at).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' })}
+                          {' '}
+                          {new Date(txn.created_at).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
+                          {txn.status === "pending" && <span className="ml-1.5 text-yellow-400">(Pendiente)</span>}
+                          {txn.status === "rejected" && <span className="ml-1.5 text-red-400">(Rechazado)</span>}
+                        </p>
+                        {txn.admin_reference && txn.status === "approved" && (
+                          <p className="text-[10px] text-emerald-400/70 mt-0.5">Ref Admin: {txn.admin_reference}</p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-black ${color}`}>
+                          {sign}{fmtWCR(txn.amount_credits || 0)}
+                        </span>
+                        {txn.amount_bs && parseFloat(txn.amount_bs) > 0 && (
+                          <p className="text-[10px] text-white/25">{fmtBs(parseFloat(txn.amount_bs))}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

@@ -163,22 +163,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // ── Visibility change: smart reconnection ──
+    // ── Nuclear Visibility Fix: full reload on return ──
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        // Record the timestamp when we went to background
         hiddenAtRef.current = Date.now();
       } else if (document.visibilityState === "visible") {
         const hiddenAt = hiddenAtRef.current;
         hiddenAtRef.current = null;
-
-        if (hiddenAt && (Date.now() - hiddenAt) > 30_000) {
-          // Was in background >30 seconds → HARD RESET
-          hardReset();
-        } else {
-          // Quick return → soft refresh (no loading state)
-          refreshAuth().catch(e => console.warn("Visibility refresh failed:", e));
+        // If was hidden for more than 5 seconds, nuke everything
+        if (hiddenAt && (Date.now() - hiddenAt) > 5_000) {
+          window.location.reload();
+          return;
         }
+        // Quick return (<5s) — just refresh auth silently
+        refreshAuth().catch(e => console.warn("Visibility refresh failed:", e));
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
