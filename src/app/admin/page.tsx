@@ -97,11 +97,35 @@ export default function AdminDashboard() {
       const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s Timeout
       
       let { data, error } = await supabase
-        .from('admin_dashboard_stats')
-        .select('*')
+        .from('transactions')
+        .select('*, profiles!fk_user(username, bank_name, id_card, phone_number, whatsapp_number, email)')
         .order('created_at', { ascending: false })
         .limit(200)
         .abortSignal(controller.signal);
+
+      if (error && error.code === 'PGRST201') {
+        console.warn("PGRST201: Intentando con transactions_user_id_fkey...");
+        const res2 = await supabase
+          .from('transactions')
+          .select('*, profiles!transactions_user_id_fkey(username, bank_name, id_card, phone_number, whatsapp_number, email)')
+          .order('created_at', { ascending: false })
+          .limit(200)
+          .abortSignal(controller.signal);
+        data = res2.data;
+        error = res2.error;
+      }
+
+      if (error && error.code === 'PGRST201') {
+        console.warn("PGRST201: Fallback de seguridad a select('*') sin profiles...");
+        const res3 = await supabase
+          .from('transactions')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(200)
+          .abortSignal(controller.signal);
+        data = res3.data;
+        error = res3.error;
+      }
 
       clearTimeout(timeoutId);
 
@@ -349,14 +373,7 @@ export default function AdminDashboard() {
   }, [authLoading, isAdmin, dataLoading]);
 
   // ── Guards ──
-  if (authLoading || (isAdmin && dataLoading)) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <Loader2 className="animate-spin text-[#ff007a]" size={40}/>
-      </div>
-    );
-  }
-  if (!isAdmin) return (
+  if (!authLoading && !isAdmin) return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
       <ShieldAlert className="text-red-500" size={56}/>
       <h1 className="text-2xl font-black">Acceso Denegado</h1>
@@ -476,7 +493,7 @@ export default function AdminDashboard() {
             {filteredTxns.length === 0 && <p className="text-center text-white/30 text-sm py-6">No hay transacciones.</p>}
             {filteredTxns.map((txn: any) => {
               const isProc = processingId === txn.id;
-              const prof = txn;
+              const prof = txn.profiles || txn;
               return (
                 <div key={txn.id} className="cyber-glass rounded-2xl p-4 border border-white/5 space-y-3">
                   <div className="flex items-start justify-between gap-2">
@@ -581,7 +598,7 @@ export default function AdminDashboard() {
                     <tr><td colSpan={9} className="p-8 text-center text-white/30">No hay transacciones.</td></tr>
                   ) : filteredTxns.map((txn: any) => {
                     const isProc = processingId === txn.id;
-                    const prof = txn;
+                    const prof = txn.profiles || txn;
                     return (
                       <tr key={txn.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                         <td className="px-4 py-3">

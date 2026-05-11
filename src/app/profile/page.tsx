@@ -169,15 +169,14 @@ export default function ProfilePage() {
     setSaveMessage("");
     const { data: { user } } = await supabase.auth.getUser();
     if (user && profile) {
-      const updates: any = {
-        full_name: profile.full_name,
-        city: profile.city,
-        bank_name: profile.bank_name,
-        id_card: profile.id_card,
-        phone_number: profile.phone_number,
-        whatsapp_number: profile.whatsapp_number,
-        email: profile.email
-      };
+      const updates: any = {};
+      if (profile.full_name?.trim()) updates.full_name = profile.full_name.trim();
+      if (profile.city?.trim()) updates.city = profile.city.trim();
+      if (profile.bank_name?.trim()) updates.bank_name = profile.bank_name.trim();
+      if (profile.id_card?.trim()) updates.id_card = profile.id_card.trim();
+      if (profile.phone_number?.trim()) updates.phone_number = profile.phone_number.trim();
+      if (profile.whatsapp_number?.trim()) updates.whatsapp_number = profile.whatsapp_number.trim();
+      if (profile.email?.trim()) updates.email = profile.email.trim();
 
       if (profile.username !== originalUsername) {
         updates.username = profile.username;
