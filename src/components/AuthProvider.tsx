@@ -27,7 +27,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("vivo_user_profile");
+      if (cached) {
+        try { return JSON.parse(cached); } catch (e) {}
+      }
+    }
+    return null;
+  });
   const [isAdmin, setIsAdmin] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("vivo_is_admin") === "true";
@@ -53,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsAdmin(adminFlag);
         if (typeof window !== "undefined") {
           localStorage.setItem("vivo_is_admin", String(adminFlag));
+          localStorage.setItem("vivo_user_profile", JSON.stringify(data));
         }
       }
     } catch (e) {
@@ -169,6 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsAdmin(false);
           if (typeof window !== "undefined") {
             localStorage.removeItem("vivo_is_admin");
+            localStorage.removeItem("vivo_user_profile");
           }
         }
         setLoading(false);
@@ -187,7 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Check if we haven't already reloaded in this session for this reason
           if (!sessionStorage.getItem("vivo_bg_reloaded")) {
             sessionStorage.setItem("vivo_bg_reloaded", "true");
-            window.location.reload();
+            router.refresh();
             return;
           }
         }

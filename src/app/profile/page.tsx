@@ -34,8 +34,20 @@ export default function ProfilePage() {
   // Modal state
   const [earningsModal, setEarningsModal] = useState(false);
   const [txModal, setTxModal] = useState(false);
-  const [earningsData, setEarningsData] = useState<any[]>([]);
-  const [txData, setTxData] = useState<any[]>([]);
+  const [earningsData, setEarningsData] = useState<any[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("vivo_earnings_data");
+      if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+    }
+    return [];
+  });
+  const [txData, setTxData] = useState<any[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("vivo_tx_data");
+      if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+    }
+    return [];
+  });
   const [modalLoading, setModalLoading] = useState(false);
 
   const supabase = createClient();
@@ -115,7 +127,11 @@ export default function ProfilePage() {
       .eq("status", "approved")
       .order("created_at", { ascending: false })
       .limit(50);
-    setEarningsData(data || []);
+    const finalData = data || [];
+    setEarningsData(finalData);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("vivo_earnings_data", JSON.stringify(finalData));
+    }
     setModalLoading(false);
   };
 
@@ -131,7 +147,11 @@ export default function ProfilePage() {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50);
-    setTxData(data || []);
+    const finalData = data || [];
+    setTxData(finalData);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("vivo_tx_data", JSON.stringify(finalData));
+    }
     setModalLoading(false);
   };
 
