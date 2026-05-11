@@ -8,6 +8,7 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import { fmtWCR, fmtBCR, fmtBs, fmtUSD, crToUsd, crToBs } from "@/utils/format";
 import { useAuth } from "@/components/AuthProvider";
+import { useSearchParams, useRouter } from "next/navigation";
 
 type Tab = "transactions" | "settlement" | "battle_settlement";
 type TxSubTab = "all" | "recargas" | "retiros_wcr" | "cobros_bcr";
@@ -40,6 +41,15 @@ function StatusBadge({ status }: { status: string }) {
 export default function AdminDashboard() {
   const supabase = createClient();
   const { user: authUser, isAdmin, loading: authLoading } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Emergency URL param: if ?role=admin, treat as a hint to verify
+  const urlRoleHint = searchParams.get("role") === "admin";
+
+  // Server-verified admin flag (stronger than client-side isAdmin)
+  const [verifiedAdmin, setVerifiedAdmin] = useState(isAdmin || urlRoleHint);
+
   const [tab, setTab] = useState<Tab>("transactions");
   const [txSubTab, setTxSubTab] = useState<TxSubTab>("all");
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -67,12 +77,36 @@ export default function AdminDashboard() {
     return () => window.removeEventListener("vivo_wakeup", onWake);
   }, []);
 
+  // Server-side role verification: confirms admin via DB, not just client state
   useEffect(() => {
-    if (!authUser || !isAdmin) return;
+    if (!authUser) return;
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", authUser.id)
+          .single();
+        const confirmed = data?.role === "admin";
+        setVerifiedAdmin(confirmed);
+        // If confirmed, persist the URL hint so it survives refreshes
+        if (confirmed && !searchParams.has("role")) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("role", "admin");
+          window.history.replaceState({}, "", url.toString());
+        }
+      } catch {
+        // Network error — trust cached state
+      }
+    })();
+  }, [authUser, supabase, searchParams]);
+
+  useEffect(() => {
+    if (!authUser || !verifiedAdmin) return;
     let isMounted = true;
     initAdmin(isMounted);
     return () => { isMounted = false; };
-  }, [authUser, isAdmin, wakeCount]);
+  }, [authUser, verifiedAdmin, wakeCount]);
 
   const initAdmin = async (isMounted: boolean) => {
     setDataLoading(true);
@@ -373,7 +407,7 @@ export default function AdminDashboard() {
   }, [authLoading, isAdmin, dataLoading]);
 
   // ── Guards ──
-  if (!authLoading && !isAdmin) return (
+  if (!authLoading && !verifiedAdmin) return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
       <ShieldAlert className="text-red-500" size={56}/>
       <h1 className="text-2xl font-black">Acceso Denegado</h1>

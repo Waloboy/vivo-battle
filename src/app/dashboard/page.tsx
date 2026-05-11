@@ -666,7 +666,7 @@ export default function ExploreDashboard() {
                           {battleTitle}
                         </p>
                         <p className="text-[9px] text-white/30 truncate">
-                          @{creatorProfile?.username || "anon"}
+                          {creatorProfile?.username ? `@${creatorProfile.username}` : ""}
                         </p>
                       </div>
 
