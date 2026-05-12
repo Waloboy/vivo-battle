@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return false;
   });
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const didInit = useRef(false);
   const lockUntil = useRef(Date.now() + 10000); // 10 second lock for nullification
@@ -125,7 +125,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── refreshAuth: main entry point ───────────────────────────────────────
   const refreshAuth = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const getSessionPromise = supabase.auth.getSession();
+      const timeoutPromise = new Promise<{ data: { session: any }, error: any }>((_, reject) => {
+        setTimeout(() => reject(new Error("Supabase auth timeout")), 2000);
+      });
+      
+      const { data: { session }, error } = await Promise.race([getSessionPromise, timeoutPromise]);
       
       if (session?.user) {
         await fetchProfile(session.user.id, session.user);
@@ -161,28 +166,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // 3. Manual Token Persistence on Focus
-    const handleFocus = async () => {
-      console.log("[Auth] Window focused, enforcing session persistence...");
-      if (typeof window !== "undefined") {
-        const at = localStorage.getItem("vivo_access_token");
-        const rt = localStorage.getItem("vivo_refresh_token");
-        if (at && rt) {
-          try {
-             const { error } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
-             if (!error) storeTokens();
-          } catch (e) { console.warn("[Auth] Manual token restore failed", e); }
-        }
-      }
-    };
-    window.addEventListener("focus", handleFocus);
-
-    // 4. Fallback loading timeout (don't block forever)
+    // 3. Fallback loading timeout (don't block forever)
     const fallback = setTimeout(() => setLoading(false), 2000);
 
     return () => {
       authListener.subscription.unsubscribe();
-      window.removeEventListener("focus", handleFocus);
       clearTimeout(fallback);
     };
   }, [refreshAuth, fetchProfile, supabase.auth, safeUpdateAuth, storeTokens]);

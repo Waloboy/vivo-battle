@@ -5,6 +5,7 @@ import { Navbar } from "@/components/Navbar";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ChallengeNotification } from "@/components/ChallengeNotification";
 import { ConnectionManager } from "@/components/ConnectionManager";
+import { EmergencyReconnect } from "@/components/EmergencyReconnect";
 
 const inter = Inter({ subsets: ["latin"] });
 const orbitron = Orbitron({ subsets: ["latin"], variable: "--font-orbitron", weight: ["400", "700", "900"] });
@@ -32,6 +33,7 @@ export default function RootLayout({
           <main className="flex-1 flex flex-col">
             {children}
           </main>
+          <EmergencyReconnect />
         </AuthProvider>
       </body>
     </html>
