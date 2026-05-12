@@ -20,7 +20,10 @@ const nextConfig: NextConfig = {
   },
   // Vital: transpile LiveKit packages so the bundler doesn't strip eval/wasm
   transpilePackages: ['livekit-client', '@livekit/components-react'],
-  turbopack: {},
+  webpack: (webpackConfig: any) => {
+    webpackConfig.optimization.minimize = false;
+    return webpackConfig;
+  },
 };
 
 export default nextConfig;
