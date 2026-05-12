@@ -66,17 +66,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
 
   const didInit = useRef(false);
-  const lockUntil = useRef(Date.now() + 10000); // 10 second lock for nullification
 
-  // Wrapper for state updates to enforce the 10-second rule and sessionStorage
+  // Wrapper for state updates
   const safeUpdateAuth = useCallback((newUser: any, newProfile: any, newIsAdmin: boolean) => {
-    const isLocked = Date.now() < lockUntil.current;
-    
-    // If locked, we reject setting to null. Only real data can overwrite.
-    if (isLocked && !newProfile) {
-      console.log("[Auth] Ignoring nullification request due to 10s security lock.");
-      return;
-    }
 
     setUser(newUser);
     setProfile(newProfile);
@@ -92,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionStorage.setItem("vivo_user_data", JSON.stringify(newUser));
         sessionStorage.setItem("vivo_user_profile", JSON.stringify(newProfile));
         sessionStorage.setItem("vivo_is_admin", String(newIsAdmin));
-      } else if (!isLocked) {
+      } else {
         localStorage.removeItem("vivo_user_data");
         localStorage.removeItem("vivo_user_profile");
         localStorage.removeItem("vivo_is_admin");
