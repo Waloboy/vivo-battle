@@ -29,10 +29,12 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => createClient(), []);
 
-  // Use localStorage as absolute truth initially
+  // Use sessionStorage and localStorage as absolute truth initially
   const [user, setUser] = useState<any>(() => {
     if (typeof window !== "undefined") {
       try {
+        const sessionStored = sessionStorage.getItem("vivo_user_data");
+        if (sessionStored) return JSON.parse(sessionStored);
         const stored = localStorage.getItem("vivo_user_data");
         return stored ? JSON.parse(stored) : null;
       } catch {}
@@ -43,6 +45,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<any>(() => {
     if (typeof window !== "undefined") {
       try {
+        const sessionStored = sessionStorage.getItem("vivo_user_profile");
+        if (sessionStored) return JSON.parse(sessionStored);
         const stored = localStorage.getItem("vivo_user_profile");
         return stored ? JSON.parse(stored) : null;
       } catch {}
@@ -52,6 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
+      const sessionStored = sessionStorage.getItem("vivo_is_admin");
+      if (sessionStored !== null) return sessionStored === "true";
       return localStorage.getItem("vivo_is_admin") === "true";
     }
     return false;
@@ -62,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const didInit = useRef(false);
   const lockUntil = useRef(Date.now() + 10000); // 10 second lock for nullification
 
-  // Wrapper for state updates to enforce the 10-second rule
+  // Wrapper for state updates to enforce the 10-second rule and sessionStorage
   const safeUpdateAuth = useCallback((newUser: any, newProfile: any, newIsAdmin: boolean) => {
     const isLocked = Date.now() < lockUntil.current;
     
@@ -78,13 +84,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (typeof window !== "undefined") {
       if (newUser && newProfile) {
+        // Save to localStorage
         localStorage.setItem("vivo_user_data", JSON.stringify(newUser));
         localStorage.setItem("vivo_user_profile", JSON.stringify(newProfile));
         localStorage.setItem("vivo_is_admin", String(newIsAdmin));
+        // Save to sessionStorage (Emergency Reserve)
+        sessionStorage.setItem("vivo_user_data", JSON.stringify(newUser));
+        sessionStorage.setItem("vivo_user_profile", JSON.stringify(newProfile));
+        sessionStorage.setItem("vivo_is_admin", String(newIsAdmin));
       } else if (!isLocked) {
         localStorage.removeItem("vivo_user_data");
         localStorage.removeItem("vivo_user_profile");
         localStorage.removeItem("vivo_is_admin");
+        sessionStorage.removeItem("vivo_user_data");
+        sessionStorage.removeItem("vivo_user_profile");
+        sessionStorage.removeItem("vivo_is_admin");
       }
     }
   }, []);
@@ -161,12 +175,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // 3. Fallback loading timeout (don't block forever)
-    const fallback = setTimeout(() => setLoading(false), 2000);
+    // 3. Intelligent Reload on Focus
+    const handleFocus = () => {
+      // Check if we were supposed to be logged in (e.g. we have session data)
+      const hadSession = sessionStorage.getItem("vivo_user_profile") || localStorage.getItem("vivo_user_profile");
+      
+      if (hadSession) {
+        setTimeout(async () => {
+          const { data } = await supabase.auth.getSession();
+          // If after 1 second of waking up, Supabase says we have no session but we used to, FORCE RELOAD
+          if (!data?.session) {
+            console.warn("[Auth] Detected zombie state after focus. Forcing hard reload to fix blank screen.");
+            if (window.location.pathname.includes("/admin")) {
+              window.location.replace("/admin");
+            } else {
+              window.location.replace(window.location.pathname);
+            }
+          }
+        }, 1000);
+      }
+    };
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       authListener.subscription.unsubscribe();
-      clearTimeout(fallback);
+      window.removeEventListener("focus", handleFocus);
     };
   }, [refreshAuth, fetchProfile, supabase.auth, safeUpdateAuth, storeTokens]);
 

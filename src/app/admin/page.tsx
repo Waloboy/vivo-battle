@@ -333,27 +333,33 @@ export default function AdminDashboard() {
         const { error } = await res.json();
         console.error("Approve failed:", error);
         alert("Error al aprobar: " + error);
-      } else {
-        // ── Auto-open WhatsApp with payment confirmation ──
-        const prof = txn.profiles;
-        const waNumber = prof?.whatsapp_number?.replace(/\D/g, '') || '';
-        const username = prof?.username || 'usuario';
-        const amountBs = txn.amount_bs || '0';
-        if (waNumber) {
-          const msg = encodeURIComponent(
-            `Hola, tu pago de ${amountBs} Bs ha sido enviado. Ref: ${adminRef}.`
-          );
-          setTimeout(() => {
-            window.open(`https://wa.me/${waNumber}?text=${msg}`, '_blank');
-          }, 1000);
-        }
+        setProcessingId(null);
+        return;
       }
+      
+      // Update UI first before leaving context
+      await fetchTransactions();
+      setProcessingId(null);
+
+      // ── Auto-open WhatsApp with payment confirmation ──
+      const prof = txn.profiles;
+      const waNumber = prof?.whatsapp_number?.replace(/\D/g, '') || '';
+      const amountBs = txn.amount_bs || '0';
+      
+      if (waNumber) {
+        const msg = encodeURIComponent(
+          `Hola, tu pago de ${amountBs} Bs ha sido enviado. Ref: ${adminRef}.`
+        );
+        setTimeout(() => {
+          window.open(`https://wa.me/${waNumber}?text=${msg}`, '_blank');
+        }, 1000);
+      }
+      
     } catch (e) {
       console.error("Approve exception:", e);
+      alert("Error de conexión al aprobar. Verifica tu internet.");
+      setProcessingId(null);
     }
-
-    setProcessingId(null);
-    await fetchTransactions();
   };
 
   const handleReject = async (txn: any) => {
