@@ -11,6 +11,7 @@ import Link from "next/link";
 export default function ProfilePage() {
   const [hasMounted, setHasMounted] = useState(false);
   const [profile, setProfile] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -61,18 +62,19 @@ export default function ProfilePage() {
   if (!hasMounted) return null;
 
   const fetchProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      // Fetch profile
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      // CORE: Fetch profile immediately
       const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (data) {
         setProfile(data);
         setOriginalUsername(data.username);
         
-        // Calculate rank based on accumulated points
-        const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).gt('total_earned', data.total_earned || 0);
-        setRankPosition((count || 0) + 1);
-
         if (data.last_username_change) {
           const lastChange = new Date(data.last_username_change);
           const diffTime = Math.abs(new Date().getTime() - lastChange.getTime());
@@ -81,40 +83,56 @@ export default function ProfilePage() {
             setDaysUntilChange(15 - diffDays);
           }
         }
+      } else {
+        throw new Error("No profile found");
       }
+      
+      setLoading(false); // Render UI as fast as possible
 
-      // Fetch BCV rate
+      // LAZY LOAD HEAVY STATS
+      fetchHeavyStats(user.id, data?.total_earned || 0);
+
+    } catch (err) {
+      console.error("Profile load error:", err);
+      setError("Error al cargar perfil");
+      setLoading(false);
+    }
+  };
+
+  const fetchHeavyStats = async (userId: string, totalEarned: number) => {
+    try {
+      const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).gt('total_earned', totalEarned);
+      setRankPosition((count || 0) + 1);
+
       const { data: config } = await supabase.from("app_config").select("value").eq("key", "bcv_rate").single();
       if (config) setBcvRate(parseFloat(config.value));
 
-      // Fetch dynamic balance using unified helper
-      const dual = await getDualBalance(user.id);
+      const dual = await getDualBalance(userId);
       setDualBal(dual);
       setBalance(dual.total);
 
-      // Fetch battle history (last 20 battles)
       const { data: battles } = await supabase
         .from("transactions")
         .select("amount_credits, created_at, reference_number, opponent_id")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .in("type", ["BATTLE_WIN", "battle_win", "bonus", "BONUS"])
         .eq("status", "approved")
         .order("created_at", { ascending: false })
         .limit(20);
       if (battles) setBattleHistory(battles);
 
-      // Fetch social counts
       const [followersRes, followingRes, battlesRes] = await Promise.all([
-        supabase.from("follow").select("id", { count: "exact", head: true }).eq("following_id", user.id),
-        supabase.from("follow").select("id", { count: "exact", head: true }).eq("follow_id", user.id),
-        supabase.from("battles").select("id", { count: "exact", head: true }).or(`player_a_id.eq.${user.id},player_b_id.eq.${user.id}`),
+        supabase.from("follow").select("id", { count: "exact", head: true }).eq("following_id", userId),
+        supabase.from("follow").select("id", { count: "exact", head: true }).eq("follow_id", userId),
+        supabase.from("battles").select("id", { count: "exact", head: true }).or(`player_a_id.eq.${userId},player_b_id.eq.${userId}`),
       ]);
 
       setFollowersCount(followersRes.count || 0);
       setFollowingCount(followingRes.count || 0);
       setBattlesCount(battlesRes.count || 0);
+    } catch (e) {
+      console.error("Lazy stats load error:", e);
     }
-    setLoading(false);
   };
 
   // ── Open Earnings Modal ──
