@@ -39,6 +39,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function AdminDashboard() {
+  const [hasMounted, setHasMounted] = useState(false);
   const supabase = createClient();
   const { user: authUser, profile, isAdmin, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
@@ -72,6 +73,7 @@ export default function AdminDashboard() {
   const [wakeCount, setWakeCount] = useState(0);
 
   useEffect(() => {
+    setHasMounted(true);
     const onWake = () => setWakeCount(c => c + 1);
     window.addEventListener("vivo_wakeup", onWake);
     return () => window.removeEventListener("vivo_wakeup", onWake);
@@ -407,6 +409,8 @@ export default function AdminDashboard() {
   }, [authLoading, isAdmin, dataLoading]);
 
   // ── Guards ──
+  if (!hasMounted) return null;
+
   if (!authLoading && !verifiedAdmin) return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
       <ShieldAlert className="text-red-500" size={56}/>
@@ -465,6 +469,8 @@ export default function AdminDashboard() {
               <div className="text-center min-w-[70px]">
                 <span className="block text-white/30 text-[10px] uppercase">Tasa BCV</span>
                 <input 
+                  id="admin-bcv-rate"
+                  name="admin_bcv_rate"
                   type="number" 
                   value={bcvRate} 
                   onChange={(e) => setBcvRate(parseFloat(e.target.value))}
@@ -591,6 +597,8 @@ export default function AdminDashboard() {
                     {(txn.type === "WITHDRAW" || txn.type === "WITHDRAW_BCR" || txn.type === "withdrawal") && txn.status === "pending" && (
                       <div className="col-span-2 mt-2">
                         <input
+                          id={`admin-ref-${txn.id}`}
+                          name={`admin_ref_${txn.id}`}
                           type="text"
                           placeholder="Escribe ref. de pago (6 dígitos)"
                           maxLength={6}
@@ -678,6 +686,8 @@ export default function AdminDashboard() {
                             <div className="flex flex-col items-end gap-2">
                               {(txn.type === "WITHDRAW" || txn.type === "WITHDRAW_BCR" || txn.type === "withdrawal") && (
                                 <input
+                                  id={`admin-ref-history-${txn.id}`}
+                                  name={`admin_ref_history_${txn.id}`}
                                   type="text"
                                   placeholder="Ref. pago (6 dígitos)"
                                   maxLength={6}

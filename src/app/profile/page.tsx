@@ -9,6 +9,7 @@ import { getUserBalance, getDualBalance, type DualBalance } from "../../utils/ba
 import Link from "next/link";
 
 export default function ProfilePage() {
+  const [hasMounted, setHasMounted] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -53,8 +54,11 @@ export default function ProfilePage() {
   const supabase = createClient();
 
   useEffect(() => {
+    setHasMounted(true);
     fetchProfile();
   }, []);
+
+  if (!hasMounted) return null;
 
   const fetchProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();

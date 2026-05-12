@@ -125,12 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── refreshAuth: main entry point ───────────────────────────────────────
   const refreshAuth = useCallback(async () => {
     try {
-      const getSessionPromise = supabase.auth.getSession();
-      const timeoutPromise = new Promise<{ data: { session: any }, error: any }>((_, reject) => {
-        setTimeout(() => reject(new Error("Supabase auth timeout")), 2000);
-      });
-      
-      const { data: { session }, error } = await Promise.race([getSessionPromise, timeoutPromise]);
+      const { data: { session }, error } = await supabase.auth.getSession();
       
       if (session?.user) {
         await fetchProfile(session.user.id, session.user);
