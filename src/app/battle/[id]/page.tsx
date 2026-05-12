@@ -216,21 +216,7 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
         )}
       </AnimatePresence>
 
-      {/* Battle Start Animation */}
-      <AnimatePresence>
-        {phase === "BATTLE" && displayTime >= 178 && (
-          <motion.div 
-            initial={{ scale: 0, rotate: -10, opacity: 0 }}
-            animate={{ scale: [0, 1.3, 1], rotate: 0, opacity: [0, 1, 1, 0] }}
-            transition={{ duration: 2 }}
-            className="absolute inset-0 flex items-center justify-center z-[60] pointer-events-none"
-          >
-            <div className="bg-[#ff007a] px-6 py-2 skew-x-[-12deg] border-2 border-white shadow-[0_0_20px_#ff007a]">
-              <span className="font-black text-white italic tracking-tighter" style={{ fontSize: 'clamp(1.5rem, 7vw, 3.5rem)' }}>¡BATALLA!</span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
     </div>
   );
 }
@@ -574,11 +560,21 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         colors: ["#ff007a", "#00d1ff"], gravity: 0.8, scalar: 1.2
       });
 
-      // Point Settlement: Player A is the authority that writes results
-      if (mySide === "A" && !hasSettledPoints) {
+      // Point Settlement: Player A is primary authority, Player B is backup
+      if ((mySide === "A" || mySide === "B") && !hasSettledPoints) {
         setHasSettledPoints(true);
         (async () => {
           try {
+            // Player B waits 3 seconds to let A settle first
+            if (mySide === "B") await new Promise(r => setTimeout(r, 3000));
+
+            // Prevent double settlement by checking DB
+            const { data: checkBattle } = await supabase.from("battles").select("is_active").eq("id", id).single();
+            if (!checkBattle?.is_active) {
+              console.log("[Battle] 🛑 Already settled by opponent.");
+              return;
+            }
+
             const winnerId = rawA > rawB ? battleData?.player_a_id : rawB > rawA ? battleData?.player_b_id : null;
             const loserId = rawA > rawB ? battleData?.player_b_id : rawB > rawA ? battleData?.player_a_id : null;
 
@@ -899,6 +895,22 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                   {displayTime}
                 </div>
               )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* GLOBAL BATALLA BANNER — fixed global positioning to cross both feeds */}
+        <AnimatePresence>
+          {phase === "BATTLE" && displayTime >= 178 && (
+            <motion.div 
+              initial={{ scale: 0, rotate: -10, opacity: 0 }}
+              animate={{ scale: [0, 1.3, 1], rotate: 0, opacity: [0, 1, 1, 0] }}
+              transition={{ duration: 2 }}
+              className="absolute inset-0 flex items-center justify-center z-[100] pointer-events-none"
+            >
+              <div className="bg-[#ff007a] px-8 py-3 skew-x-[-12deg] border-4 border-white shadow-[0_0_40px_#ff007a]">
+                <span className="font-black text-white italic tracking-tighter" style={{ fontSize: 'clamp(3rem, 10vw, 6rem)', textShadow: '0 0 20px rgba(255,255,255,0.5)' }}>¡BATALLA!</span>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

@@ -193,9 +193,9 @@ export default function ExploreDashboard() {
   }, [supabase]);
 
   // ── Fetch battles ──
-  const fetchBattles = useCallback(async (page: number, tab: TabKey, append = false) => {
-    if (!append) setLoading(true);
-    else setLoadingMore(true);
+  const fetchBattles = useCallback(async (page: number, tab: TabKey, append = false, isBackground = false) => {
+    if (!append && !isBackground) setLoading(true);
+    else if (append) setLoadingMore(true);
 
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
@@ -282,9 +282,13 @@ export default function ExploreDashboard() {
     setLoadingMore(false);
   }, [supabase, followedUsers]);
 
+  const prevTabRef = useRef<TabKey | null>(null);
+
   useEffect(() => {
+    const isBackground = prevTabRef.current === activeTab;
+    prevTabRef.current = activeTab;
     pageRef.current = 0;
-    fetchBattles(0, activeTab);
+    fetchBattles(0, activeTab, false, isBackground);
   }, [activeTab, fetchBattles, wakeCount]);
 
   // ── Infinite Scroll Observer ──
@@ -506,7 +510,7 @@ export default function ExploreDashboard() {
       </div>
 
       {/* ── Loading State ── */}
-      {loading && (
+      {loading && battles.length === 0 && (
         <div className="flex items-center justify-center py-20">
           <div className="flex flex-col items-center gap-4">
             <div className="flex flex-col items-center gap-3">

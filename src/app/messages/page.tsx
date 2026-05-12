@@ -40,27 +40,62 @@ export default function MessagesPage() {
 
   // ── Init ──
   useEffect(() => {
-    (async () => {
+    let currentUserId: string | null = null;
+
+    const fetchInit = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      
+      currentUserId = user.id;
       setUser(user);
+      
+      const cached = localStorage.getItem(`vivo_msgs_${user.id}`);
+      if (cached) {
+        try { 
+          setConversations(JSON.parse(cached)); 
+          setLoading(false);
+        } catch(e) {}
+      }
+      
       await loadConversations(user.id);
       setLoading(false);
-    })();
+    };
+    
+    fetchInit();
+
+    const onWake = () => {
+      if (currentUserId) loadConversations(currentUserId);
+    };
+    
+    window.addEventListener("vivo_wakeup", onWake);
+    const onVisChange = () => { if (document.visibilityState === "visible") onWake(); };
+    window.addEventListener("visibilitychange", onVisChange);
+    
+    return () => {
+      window.removeEventListener("vivo_wakeup", onWake);
+      window.removeEventListener("visibilitychange", onVisChange);
+    };
   }, []);
 
   // ── Load conversations ──
   const loadConversations = async (userId: string) => {
-    // Get all messages involving the user
-    const { data: msgs } = await supabase
-      .from("messages")
-      .select("*")
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-      .order("created_at", { ascending: false });
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-    if (!msgs) return;
+      // Get all messages involving the user
+      const { data: msgs, error } = await supabase
+        .from("messages")
+        .select("*")
+        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+        .order("created_at", { ascending: false })
+        .abortSignal(controller.signal);
 
-    // Group by conversation partner
+      clearTimeout(timeoutId);
+
+      if (error || !msgs) throw new Error("Fetch failed");
+
+      // Group by conversation partner
     const convMap = new Map<string, { last_message: string; last_time: string; unread: number }>();
     for (const msg of msgs) {
       const partnerId = msg.sender_id === userId ? msg.receiver_id : msg.sender_id;
@@ -104,6 +139,19 @@ export default function MessagesPage() {
     // Sort by last message time
     convs.sort((a, b) => new Date(b.last_time).getTime() - new Date(a.last_time).getTime());
     setConversations(convs);
+    localStorage.setItem(`vivo_msgs_${userId}`, JSON.stringify(convs));
+    
+    } catch (err: any) {
+      console.warn("Conversation fetch aborted or failed, loading from cache...", err);
+      const cached = localStorage.getItem(`vivo_msgs_${userId}`);
+      if (cached) {
+        try {
+          setConversations(JSON.parse(cached));
+        } catch (e) {}
+      } else {
+        setConversations([]);
+      }
+    }
   };
 
   // ── Open chat ──
@@ -259,13 +307,7 @@ export default function MessagesPage() {
     return () => clearTimeout(timer);
   }, [loading]);
 
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="animate-spin text-[#ff007a]" size={36} />
-      </div>
-    );
-  }
+
 
   // ── Active Chat View ──
   if (activeChat && activeChatUser) {
@@ -418,7 +460,11 @@ export default function MessagesPage() {
       </div>
 
       {/* Conversations */}
-      {conversations.length === 0 && !searchQuery ? (
+      {loading && conversations.length === 0 && !searchQuery ? (
+        <div className="flex-1 flex items-center justify-center py-20">
+          <Loader2 className="animate-spin text-[#ff007a]" size={36} />
+        </div>
+      ) : conversations.length === 0 && !searchQuery ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="w-16 h-16 rounded-full bg-white/[0.03] border border-white/10 flex items-center justify-center mb-4">
             <MessageCircle size={28} className="text-white/15" />

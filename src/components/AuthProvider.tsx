@@ -167,31 +167,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // 3. Intelligent Reload on Focus
-    const handleFocus = () => {
-      // Check if we were supposed to be logged in (e.g. we have session data)
-      const hadSession = sessionStorage.getItem("vivo_user_profile") || localStorage.getItem("vivo_user_profile");
-      
-      if (hadSession) {
-        setTimeout(async () => {
-          const { data } = await supabase.auth.getSession();
-          // If after 1 second of waking up, Supabase says we have no session but we used to, FORCE RELOAD
-          if (!data?.session) {
-            console.warn("[Auth] Detected zombie state after focus. Forcing hard reload to fix blank screen.");
-            if (window.location.pathname.includes("/admin")) {
-              window.location.replace("/admin");
-            } else {
-              window.location.replace(window.location.pathname);
-            }
-          }
-        }, 1000);
+    // 3. Intelligent Reload on Visibility Change
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        console.log("[Auth] App visible. Forcing auth refresh.");
+        refreshAuth();
       }
     };
-    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       authListener.subscription.unsubscribe();
-      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refreshAuth, fetchProfile, supabase.auth, safeUpdateAuth, storeTokens]);
 

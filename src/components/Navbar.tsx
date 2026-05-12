@@ -8,7 +8,7 @@ import { createClient } from "@/utils/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 
 export function Navbar() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, loading } = useAuth();
   const [unreadMessages, setUnreadMessages] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -60,8 +60,9 @@ export function Navbar() {
           <div className="p-2 rounded-lg bg-gradient-to-br from-[#ff007a] to-[#00d1ff] opacity-80 group-hover:opacity-100 transition-opacity">
             <Swords size={20} className="text-white" />
           </div>
-          <span className="font-black text-xl tracking-tight text-gradient hidden sm:block">
+          <span className="font-black text-xl tracking-tight text-gradient hidden sm:flex items-center gap-2">
             VIVO BATTLE
+            {loading && <div className="w-3 h-3 rounded-full border-2 border-[#00d1ff] border-t-transparent animate-spin ml-2" />}
           </span>
         </Link>
         

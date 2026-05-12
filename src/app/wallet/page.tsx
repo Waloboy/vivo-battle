@@ -19,14 +19,38 @@ export default function Dashboard() {
   const [isReloadModalOpen, setIsReloadModalOpen] = useState(false);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isBcrWithdrawModalOpen, setIsBcrWithdrawModalOpen] = useState(false);
-  const [balance, setBalance] = useState<number>(0);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [dualBal, setDualBal] = useState<DualBalance>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const storedUser = localStorage.getItem("vivo_user_data");
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          const cached = localStorage.getItem(`vivo_balance_${user.id}`);
+          if (cached) return JSON.parse(cached);
+        }
+      } catch (e) {}
+    }
+    return { wallet_credits: 0, battle_credits: 0, total: 0 };
+  });
+  const [balance, setBalance] = useState<number>(() => dualBal.total);
+  const [transactions, setTransactions] = useState<any[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const storedUser = localStorage.getItem("vivo_user_data");
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          const cachedTx = localStorage.getItem(`vivo_tx_${user.id}`);
+          if (cachedTx) return JSON.parse(cachedTx);
+        }
+      } catch (e) {}
+    }
+    return [];
+  });
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [bcvRate, setBcvRate] = useState<number | null>(null);
-  const [dualBal, setDualBal] = useState<DualBalance>({ wallet_credits: 0, battle_credits: 0, total: 0 });
 
 const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provincial", "BNC", "Bancaribe", "Banco Exterior", "Banco del Tesoro", "Banco Bicentenario", "Otro"];
 
@@ -40,29 +64,61 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
   // Withdraw State
   const [withdrawAmount, setWithdrawAmount] = useState("");
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { 
+    fetchData(); 
+    const handleVis = () => {
+      if (document.visibilityState === "visible") fetchData(true);
+    };
+    document.addEventListener("visibilitychange", handleVis);
+    window.addEventListener("vivo_wakeup", () => fetchData(true));
+    return () => document.removeEventListener("visibilitychange", handleVis);
+  }, []);
 
-  const fetchData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    setUser(user);
+  const fetchData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      setUser(user);
 
-    const [profileRes, txRes, rateRes, calculatedBalance] = await Promise.all([
-      supabase.from("profiles").select("*").eq("id", user.id).single(),
-      supabase.from("transactions").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
-      supabase.from("app_config").select("value").eq("key", "bcv_rate").single(),
-      getUserBalance(user.id)
-    ]);
+      const [profileRes, txRes, rateRes, calculatedBalance] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", user.id).abortSignal(controller.signal).single(),
+        supabase.from("transactions").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10).abortSignal(controller.signal),
+        supabase.from("app_config").select("value").eq("key", "bcv_rate").abortSignal(controller.signal).single(),
+        getUserBalance(user.id)
+      ]);
 
-    if (profileRes.data) setProfile(profileRes.data);
-    setBalance(calculatedBalance);
-    // Also fetch dual balance
-    const dual = await getDualBalance(user.id);
-    setDualBal(dual);
-    if (txRes.data) setTransactions(txRes.data);
-    if (rateRes.data?.value) setBcvRate(parseFloat(rateRes.data.value));
+      clearTimeout(timeoutId);
 
-    setLoading(false);
+      if (profileRes.data) {
+        setProfile(profileRes.data);
+        localStorage.setItem("vivo_user_data", JSON.stringify(profileRes.data));
+      }
+      setBalance(calculatedBalance);
+      
+      const dual = await getDualBalance(user.id);
+      setDualBal(dual);
+      localStorage.setItem(`vivo_balance_${user.id}`, JSON.stringify(dual));
+      
+      if (txRes.data) {
+        setTransactions(txRes.data);
+        localStorage.setItem(`vivo_tx_${user.id}`, JSON.stringify(txRes.data));
+      }
+      if (rateRes.data?.value) setBcvRate(parseFloat(rateRes.data.value));
+
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.warn('Wallet fetch timeout - using cache');
+      } else {
+        console.error('Wallet fetch error:', err);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Conversions: 100 CR = 1 USD = Tasa_BCV Bs
@@ -169,14 +225,6 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
     }
     return () => clearTimeout(timer);
   }, [loading]);
-
-  if (loading) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <Loader2 className="animate-spin text-[#ff007a]" size={40} />
-      </div>
-    );
-  }
 
   return (
     <div className="flex-1 max-w-4xl w-full mx-auto p-4 md:p-8 space-y-6">

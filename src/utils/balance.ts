@@ -18,27 +18,58 @@ export interface DualBalance {
 }
 
 export async function getDualBalance(userId: string): Promise<DualBalance> {
+  const cacheKey = `vivo_balance_${userId}`;
+  let cached: DualBalance | null = null;
+  
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem(cacheKey);
+      if (stored) cached = JSON.parse(stored);
+    } catch (e) {
+      console.warn("Failed to parse cached balance", e);
+    }
+  }
+
   const supabase = createClient();
 
-  const { data: profile, error } = await supabase
+  const fetchPromise = supabase
     .from("profiles")
     .select("wallet_credits, battle_credits")
     .eq("id", userId)
     .single();
 
-  if (error || !profile) {
-    console.error("Error fetching dual balance from profile:", error);
+  const timeoutPromise = new Promise<{ data: any, error: any }>((resolve) => 
+    setTimeout(() => resolve({ data: null, error: new Error("Supabase timeout") }), 3000)
+  );
+
+  try {
+    const { data: profile, error } = await Promise.race([fetchPromise, timeoutPromise]);
+
+    if (error || !profile) {
+      console.error("Error fetching dual balance from profile:", error);
+      if (cached) return cached;
+      return { wallet_credits: 0, battle_credits: 0, total: 0 };
+    }
+
+    const wallet_credits = profile.wallet_credits || 0;
+    const battle_credits = profile.battle_credits || 0;
+
+    const result = {
+      wallet_credits: Math.max(0, wallet_credits),
+      battle_credits: Math.max(0, battle_credits),
+      total: Math.max(0, wallet_credits) + Math.max(0, battle_credits),
+    };
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(cacheKey, JSON.stringify(result));
+    }
+
+    return result;
+  } catch (err) {
+    console.error("Exception fetching dual balance:", err);
+    if (cached) return cached;
     return { wallet_credits: 0, battle_credits: 0, total: 0 };
   }
-
-  const wallet_credits = profile.wallet_credits || 0;
-  const battle_credits = profile.battle_credits || 0;
-
-  return {
-    wallet_credits: Math.max(0, wallet_credits),
-    battle_credits: Math.max(0, battle_credits),
-    total: Math.max(0, wallet_credits) + Math.max(0, battle_credits),
-  };
 }
 
 /** Backward-compat: returns total balance (WCR + BCR) */

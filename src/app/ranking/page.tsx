@@ -28,6 +28,20 @@ export default function RankingPage() {
 
     const fetchRanking = async () => {
       try {
+        const cached = localStorage.getItem('vivo_ranking');
+        if (cached && isMounted) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (parsed.users) setUsers(parsed.users);
+            if (parsed.myProfile) {
+              setMyProfile(parsed.myProfile);
+              setMyRank(parsed.myRank);
+              setCurrentUserId(parsed.myProfile.id);
+            }
+            setLoading(false);
+          } catch(e) {}
+        }
+
         // Get current user
         const { data: { user } } = await supabase.auth.getUser();
         if (user && isMounted) setCurrentUserId(user.id);
@@ -59,11 +73,16 @@ export default function RankingPage() {
           setUsers(data);
           
           // Find the current user's rank
+          let profileToCache = null;
+          let rankToCache = null;
+          
           if (user) {
             const userIndex = data.findIndex((u: any) => u.id === user.id);
             if (userIndex >= 0) {
               setMyRank(userIndex + 1);
               setMyProfile(data[userIndex]);
+              profileToCache = data[userIndex];
+              rankToCache = userIndex + 1;
             } else {
               // User not in top 100 — calculate their actual rank
               const { data: myData } = await supabase
@@ -75,14 +94,25 @@ export default function RankingPage() {
               
               if (myData && isMounted) {
                 setMyProfile(myData);
+                profileToCache = myData;
                 const { count } = await supabase
                   .from("profiles")
                   .select("id", { count: "exact", head: true })
                   .gt("total_earned", myData.total_earned || 0)
                   .abortSignal(controller.signal);
-                if (isMounted) setMyRank((count || 0) + 1);
+                if (isMounted) {
+                  setMyRank((count || 0) + 1);
+                  rankToCache = (count || 0) + 1;
+                }
               }
             }
+          }
+          if (isMounted) {
+            localStorage.setItem('vivo_ranking', JSON.stringify({
+              users: data,
+              myProfile: profileToCache,
+              myRank: rankToCache
+            }));
           }
         }
       } catch (err: any) {
@@ -173,8 +203,8 @@ export default function RankingPage() {
         </div>
       )}
 
-      {loading ? (
-        <div className="flex items-center justify-center flex-1">
+      {loading && users.length === 0 ? (
+        <div className="flex items-center justify-center flex-1 py-10">
           <div className="w-8 h-8 border-4 border-[#ff007a] border-t-transparent rounded-full animate-spin" />
         </div>
       ) : users.length === 0 ? (
