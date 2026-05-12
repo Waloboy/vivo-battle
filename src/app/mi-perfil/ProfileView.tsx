@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useRef } from "react";
 import { User, MapPin, Building2, Loader2, Save, CheckCircle2, Phone, FileText, Edit2, ArrowLeft, CreditCard, History, Sparkles, TrendingUp, Users, UserCheck, UserPlus, Camera, Trophy, X, Swords } from "lucide-react";
@@ -54,14 +54,7 @@ export default function ProfileViewComponent() {
 
   const supabase = createClient();
 
-  useEffect(() => {
-    setHasMounted(true);
-    fetchProfile();
-  }, []);
-
-  if (!hasMounted) return null;
-
-  const fetchProfile = async () => {
+  async function fetchProfile() {
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) { setLoading(false); return; }
@@ -244,6 +237,13 @@ export default function ProfileViewComponent() {
 
   const balanceUsd = balance / 100;
   const balanceBs = bcvRate ? (balance / 100) * bcvRate : null;
+
+  useEffect(() => {
+    setHasMounted(true);
+    fetchProfile();
+  }, []);
+
+  if (!hasMounted) return null;
 
   return (
     <>
