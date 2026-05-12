@@ -74,9 +74,6 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     setHasMounted(true);
-    const onWake = () => setWakeCount(c => c + 1);
-    window.addEventListener("vivo_wakeup", onWake);
-    return () => window.removeEventListener("vivo_wakeup", onWake);
   }, []);
 
   // Server-side role verification: confirms admin via DB, not just client state
@@ -346,7 +343,9 @@ export default function AdminDashboard() {
           const msg = encodeURIComponent(
             `Hola, tu pago de ${amountBs} Bs ha sido enviado. Ref: ${adminRef}.`
           );
-          window.open(`https://wa.me/${waNumber}?text=${msg}`, '_blank');
+          setTimeout(() => {
+            window.open(`https://wa.me/${waNumber}?text=${msg}`, '_blank');
+          }, 1000);
         }
       }
     } catch (e) {
@@ -398,15 +397,7 @@ export default function AdminDashboard() {
     else alert("Tasa BCV actualizada correctamente.");
   };
 
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (authLoading || (isAdmin && dataLoading)) {
-      timer = setTimeout(() => {
-        // You would theoretically set authLoading to false, but we'll just force the page
-      }, 3000);
-    }
-    return () => clearTimeout(timer);
-  }, [authLoading, isAdmin, dataLoading]);
+
 
   // ── Guards ──
   if (!hasMounted) return null;
