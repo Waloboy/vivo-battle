@@ -99,8 +99,8 @@ export function Navbar() {
               <span className="hidden sm:block">Mensajes</span>
             </Link>
             <Link 
-              href="/profile" 
-              className={`flex items-center gap-2 transition-colors ${pathname === '/profile' ? 'text-[#ff007a]' : 'text-white/50 hover:text-[#ff007a]'}`}
+              href="/mi-perfil" 
+              className={`flex items-center gap-2 transition-colors ${pathname === '/mi-perfil' ? 'text-[#ff007a]' : 'text-white/50 hover:text-[#ff007a]'}`}
             >
               <User size={18} />
               <span className="hidden sm:block">Perfil</span>
