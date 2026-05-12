@@ -4,7 +4,6 @@ import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ChallengeNotification } from "@/components/ChallengeNotification";
-import { ConnectionManager } from "@/components/ConnectionManager";
 import { EmergencyReconnect } from "@/components/EmergencyReconnect";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -23,11 +22,10 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark">
       <head>
-        <meta httpEquiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * 'unsafe-inline' wss: ws:; img-src * data: blob:; frame-src *; style-src * 'unsafe-inline';" />
+        <meta httpEquiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src 'self' * 'unsafe-inline' 'unsafe-eval'; connect-src * 'unsafe-inline' wss: ws:; img-src * data: blob:; frame-src *; style-src * 'unsafe-inline';" />
       </head>
       <body className={`${inter.className} ${orbitron.variable} bg-[#0a0a0a] text-white min-h-screen flex flex-col`}>
         <AuthProvider>
-          <ConnectionManager />
           <Navbar />
           <ChallengeNotification />
           <main className="flex-1 flex flex-col">

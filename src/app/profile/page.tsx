@@ -518,7 +518,7 @@ export default function ProfilePage() {
             
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Username</label>
+                <label htmlFor="profile-username" className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Username</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <span className="text-white/40 font-bold">@</span>
@@ -551,7 +551,7 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Nombre Completo</label>
+                <label htmlFor="profile-fullname" className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Nombre Completo</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <User size={16} className="text-white/40" />
@@ -570,7 +570,7 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Ciudad</label>
+                <label htmlFor="profile-city" className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Ciudad</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <MapPin size={16} className="text-white/40" />
@@ -603,7 +603,7 @@ export default function ProfilePage() {
 
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">WhatsApp</label>
+                <label htmlFor="profile-whatsapp" className="text-[10px] font-bold text-white/40 uppercase tracking-widest">WhatsApp</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Phone size={16} className="text-[#25D366]" />
@@ -622,7 +622,7 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Correo Electrónico</label>
+                <label htmlFor="profile-email" className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Correo Electrónico</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <FileText size={16} className="text-white/40" />
@@ -656,7 +656,7 @@ export default function ProfilePage() {
             
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-[#ffd700]/60 uppercase tracking-widest">Banco Destino</label>
+                <label htmlFor="profile-bank" className="text-[10px] font-bold text-[#ffd700]/60 uppercase tracking-widest">Banco Destino</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Building2 size={16} className="text-[#ffd700]/40" />
@@ -674,7 +674,7 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-[#ffd700]/60 uppercase tracking-widest">Cédula</label>
+                <label htmlFor="profile-id-card" className="text-[10px] font-bold text-[#ffd700]/60 uppercase tracking-widest">Cédula</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <FileText size={16} className="text-[#ffd700]/40" />
@@ -692,7 +692,7 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-[#ffd700]/60 uppercase tracking-widest">Teléfono Pago Móvil</label>
+                <label htmlFor="profile-phone" className="text-[10px] font-bold text-[#ffd700]/60 uppercase tracking-widest">Teléfono Pago Móvil</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Phone size={16} className="text-[#ffd700]/40" />
