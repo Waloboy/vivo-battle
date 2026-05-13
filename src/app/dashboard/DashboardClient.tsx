@@ -66,6 +66,7 @@ function simulateViewers(battleId: string, scoreA: number, scoreB: number): numb
 
 export default function ExploreDashboard() {
   // Hydration guard — prevents React Error #418
+  if (typeof window === 'undefined') return null;
   const isClient = useIsClient();
   const supabase = useMemo(() => createClient(), []);
 
@@ -379,10 +380,10 @@ export default function ExploreDashboard() {
     const challengeId = crypto.randomUUID();
 
     // 1. Enviar Broadcast (Instantáneo, bypass de DB)
-    const channel = supabase.channel("global-challenge-listener");
+    const channel = supabase.channel("global");
     await channel.send({
       type: "broadcast",
-      event: "CHALLENGE_RECEIVED",
+      event: "challenge",
       payload: {
         id: challengeId,
         challenger_id: user.id,
@@ -421,7 +422,7 @@ export default function ExploreDashboard() {
       await supabase.from("matchmaking_queue").delete().eq("user_id", user.id);
       await supabase.from("matchmaking_queue").delete().eq("user_id", opponent.user_id);
       setMatchmaking(false);
-      if (battle) router.push(`/battle/${battle.id}`);
+      if (battle) window.location.href = `/battle/${battle.id}`;
     } else {
       // Wait for match via polling (simple approach)
       const interval = setInterval(async () => {
@@ -429,7 +430,7 @@ export default function ExploreDashboard() {
         if (!myEntry) { clearInterval(interval); setMatchmaking(false); return; }
         // Check if someone created a battle with us
         const { data: newBattle } = await supabase.from("battles").select("id").or(`player_a_id.eq.${user.id},player_b_id.eq.${user.id}`).eq("is_active", true).order("started_at", { ascending: false }).limit(1).single();
-        if (newBattle) { clearInterval(interval); await supabase.from("matchmaking_queue").delete().eq("user_id", user.id); setMatchmaking(false); router.push(`/battle/${newBattle.id}`); }
+        if (newBattle) { clearInterval(interval); await supabase.from("matchmaking_queue").delete().eq("user_id", user.id); setMatchmaking(false); window.location.href = `/battle/${newBattle.id}`; }
       }, 3000);
       // Auto-cancel after 30s
       setTimeout(async () => { clearInterval(interval); await supabase.from("matchmaking_queue").delete().eq("user_id", user.id); setMatchmaking(false); }, 30000);
@@ -452,7 +453,7 @@ export default function ExploreDashboard() {
   };
 
   // Hydration guard: render nothing until client-side mount
-  if (!isClient) return <div className="flex-1 w-full h-full min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#00d1ff]" /></div>;
+  if (!isClient) return null;
 
   return (
     <div className="flex-1 w-full max-w-3xl mx-auto px-3 md:px-6 pb-8">

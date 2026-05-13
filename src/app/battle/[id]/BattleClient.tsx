@@ -289,6 +289,7 @@ function LocalControls({ phase }: { phase: BattlePhase }) {
 
 
 export default function BattleView({ params }: { params: Promise<{ id: string }> }) {
+  if (typeof window === 'undefined') return null;
   const { id } = React.use(params);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -885,7 +886,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const winData = getWinner();
 
   // Hydration guard: render nothing until client-side mount
-  if (!isClient) return <div className="flex-1 w-full h-full min-h-screen flex items-center justify-center bg-[#0d0008]"><Loader2 className="w-8 h-8 animate-spin text-[#00d1ff]" /></div>;
+  if (!isClient) return null;
 
   return (
     <motion.div animate={shaking ? { x: [0, -8, 8, -6, 6, -3, 3, 0], y: [0, 4, -4, 3, -3, 1, -1, 0] } : {}} transition={{ duration: 1 }} className="flex-1 flex flex-col max-w-7xl w-full mx-auto relative overflow-hidden">

@@ -57,12 +57,12 @@ export function ChallengeNotification() {
       }
 
       const channel = supabase
-        .channel("global-challenge-listener", {
+        .channel("global", {
           config: { broadcast: { self: false } },
         })
         .on(
           "broadcast",
-          { event: "CHALLENGE_RECEIVED" },
+          { event: "challenge" },
           async (payload: any) => {
             if (!mounted || !userIdRef.current) return;
             const p = payload.payload;
@@ -96,72 +96,6 @@ export function ChallengeNotification() {
               console.log("[ChallengeNotification] ⚡ Broadcast ACCEPTED, redirecting...");
               setHidden(true);
               window.location.href = `/battle/${p.battle_id}`;
-            }
-          }
-        )
-        // Keep DB fallback just in case we miss the broadcast (e.g., page refresh)
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "challenges",
-            filter: `challenged_id=eq.${user.id}`,
-          },
-          async (payload: any) => {
-            if (!mounted || !userIdRef.current) return;
-            // Only handle if not already active to avoid duplicates
-            if (payload.new.status === "pending") {
-              // If we already have a challenge modal open, don't override it immediately
-              setChallenge(prev => {
-                if (prev && prev.id === payload.new.id) return prev; // Already showing
-                
-                // Fetch and set in background
-                supabase.from("profiles").select("username").eq("id", payload.new.challenger_id).single()
-                  .then(({ data: prof }: { data: { username: string } | null }) => {
-                    if (mounted) {
-
-                      setChallenge({
-                        id: payload.new.id,
-                        challenger_id: payload.new.challenger_id,
-                        challenger_username: prof?.username || "???",
-                      });
-                      setHidden(false);
-                    }
-                  });
-                return prev;
-              });
-            }
-          }
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "challenges",
-            filter: `challenger_id=eq.${user.id}`,
-          },
-          (payload: any) => {
-            if (!mounted || !userIdRef.current) return;
-            if (payload.new.status === "accepted" && payload.new.battle_id) {
-              setHidden(true);
-              // Hard navigate — bypasses React hydration delays
-              window.location.assign(`/battle/${payload.new.battle_id}`);
-            }
-          }
-        )
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "battles" },
-          (payload: any) => {
-            if (!mounted || !userIdRef.current) return;
-            if (
-              payload.new.player_a_id === userIdRef.current ||
-              payload.new.player_b_id === userIdRef.current
-            ) {
-              setHidden(true);
-              window.location.assign(`/battle/${payload.new.id}`);
             }
           }
         )
@@ -275,7 +209,7 @@ export function ChallengeNotification() {
     }
 
     // ⚡ Broadcast acceptance FIRST — fastest path for challenger
-    supabase.channel("global-challenge-listener").send({
+    supabase.channel("global").send({
       type: "broadcast",
       event: "CHALLENGE_ACCEPTED",
       payload: { battle_id: battle.id, challenger_id: challenge.challenger_id, challenged_id: user.id },
