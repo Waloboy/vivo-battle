@@ -13,46 +13,25 @@ interface IncomingChallenge {
 
 export function ChallengeNotification() {
   const supabase = useMemo(() => createClient(), []);
+  const [mounted, setMounted] = useState(false);
   const [challenge, setChallenge] = useState<IncomingChallenge | null>(null);
   const [responding, setResponding] = useState(false);
   const [hidden, setHidden] = useState(false);
-  const [channelStatus, setChannelStatus] = useState<string>("connecting");
   const userIdRef = useRef<string | null>(null);
-  const channelRef = useRef<any>(null);
-
-  const [wakeCount, setWakeCount] = useState(0);
 
   useEffect(() => {
-    let mounted = true;
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
+    let isSubscribed = true;
 
     const setupRealtime = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !mounted) return;
+      if (!user || !isSubscribed) return;
       userIdRef.current = user.id;
-
-      // Check for pending challenges on load
-      const { data: pending } = await supabase
-        .from("challenges")
-        .select("id, challenger_id, profiles!challenges_challenger_id_fkey(username)")
-        .eq("challenged_id", user.id)
-        .eq("status", "pending")
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (mounted && pending && pending.length > 0) {
-        const c = pending[0];
-        setChallenge({
-          id: c.id,
-          challenger_id: c.challenger_id,
-          challenger_username: (c as any).profiles?.username || "???",
-        });
-        setHidden(false);
-      }
-
-      // Remove any existing channel before creating new one
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-      }
 
       const channel = supabase
         .channel("global-sync", {
@@ -61,129 +40,48 @@ export function ChallengeNotification() {
         .on(
           "broadcast",
           { event: "challenge" },
-          async (payload: any) => {
-            if (!mounted || !userIdRef.current) return;
+          (payload: any) => {
+            if (!isSubscribed || !userIdRef.current) return;
             const p = payload.payload;
             
-            // Only show if the broadcast challenge is meant for us
             if (p.challenged_id === userIdRef.current) {
-              // Fetch username for UI
-              const { data: prof } = (await supabase
-                .from("profiles")
-                .select("username")
-                .eq("id", p.challenger_id)
-                .single()) as { data: { username: string } | null };
-
               setChallenge({
                 id: p.id,
                 challenger_id: p.challenger_id,
-                challenger_username: prof?.username || "???",
+                challenger_username: p.challenger_username || "Jugador",
               });
               setHidden(false);
             }
           }
         )
-        // ⚡ BROADCAST HANDSHAKE: fastest path — both clients get this before DB
         .on(
           "broadcast",
           { event: "CHALLENGE_ACCEPTED" },
           (payload: any) => {
-            if (!mounted || !userIdRef.current) return;
+            if (!isSubscribed || !userIdRef.current) return;
             const p = payload.payload;
             if (p.challenger_id === userIdRef.current || p.challenged_id === userIdRef.current) {
-              console.log("[ChallengeNotification] ⚡ Broadcast ACCEPTED, redirecting...");
               setHidden(true);
               window.location.href = `/battle/${p.battle_id}`;
             }
           }
         )
-        .subscribe((status: string, err?: Error) => {
-          if (!mounted) return;
-          setChannelStatus(status === "SUBSCRIBED" ? "connected" : status);
-          if (err) console.error("[ChallengeNotification] Channel error:", err);
-        });
+        .subscribe();
 
-      channelRef.current = channel;
+      return () => {
+        supabase.removeChannel(channel);
+      };
     };
 
-    setupRealtime();
-
-    // Resilience: ALWAYS re-subscribe on focus + force WS reconnect
-    const handleVisibility = () => {
-      if (document.hidden) return;
-      // Force Supabase Realtime WS reconnect if it dropped
-      try { (supabase as any).realtime?.connect(); } catch (_) {}
-
-      if (channelRef.current) {
-        const state = (channelRef.current as any).state;
-        if (state !== "joined") {
-          console.log(`[ChallengeNotification] Channel state='${state}', forcing re-subscribe...`);
-          setWakeCount(c => c + 1);
-        } else {
-          channelRef.current.subscribe();
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    window.addEventListener("focus", handleVisibility);
-
-    // ── POLLING FALLBACK: if WS is dead, "look" manually every 3s ──
-    const pollInterval = setInterval(async () => {
-      if (!userIdRef.current) return;
-      // Skip polling if channel is alive
-      const chState = (channelRef.current as any)?.state;
-      if (chState === "joined") return;
-
-      console.log("[ChallengeNotification] WS down, polling fallback...");
-      try {
-        // Check for pending challenges
-        const { data: pending } = await supabase
-          .from("challenges")
-          .select("id, challenger_id, status, battle_id, profiles!challenges_challenger_id_fkey(username)")
-          .eq("challenged_id", userIdRef.current)
-          .eq("status", "pending")
-          .order("created_at", { ascending: false })
-          .limit(1);
-
-        if (pending && pending.length > 0 && mounted) {
-          const c = pending[0];
-          setChallenge(prev => {
-            if (prev?.id === c.id) return prev;
-            return {
-              id: c.id,
-              challenger_id: c.challenger_id,
-              challenger_username: (c as any).profiles?.username || "???",
-            };
-          });
-          setHidden(false);
-        }
-
-        // Check if any of MY challenges got accepted (challenger redirect)
-        const { data: accepted } = await supabase
-          .from("challenges")
-          .select("id, battle_id")
-          .eq("challenger_id", userIdRef.current)
-          .eq("status", "accepted")
-          .order("resolved_at", { ascending: false })
-          .limit(1);
-
-        if (accepted && accepted.length > 0 && accepted[0].battle_id && mounted) {
-          window.location.href = `/battle/${accepted[0].battle_id}`;
-        }
-      } catch (_) {}
-    }, 3000);
+    const cleanup = setupRealtime();
 
     return () => {
-      mounted = false;
-      clearInterval(pollInterval);
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-      document.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("focus", handleVisibility);
+      isSubscribed = false;
+      cleanup.then(cleanupFn => {
+        if (cleanupFn) cleanupFn();
+      });
     };
-  }, [supabase, wakeCount]);
+  }, [mounted, supabase]);
 
   const handleAccept = async () => {
     if (!challenge || responding) return;
@@ -248,7 +146,7 @@ export function ChallengeNotification() {
 
   return (
     <AnimatePresence>
-      {challenge && !hidden && (
+      {mounted && challenge && !hidden && (
         <motion.div
           initial={{ opacity: 0, y: -100, scale: 0.8 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}

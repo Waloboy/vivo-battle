@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Eye, Plus, UserPlus, Check, Loader2, Flame, Zap, Search, Swords, Shuffle, X } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import { useAuth } from "@/components/AuthProvider";
 
 // ── Types ──
 interface BattleProfile {
@@ -65,7 +66,7 @@ function simulateViewers(battleId: string, scoreA: number, scoreB: number): numb
 export default function ExploreDashboard() {
   // SafeHydrate in page.tsx guarantees this only runs in browser
   const supabase = useMemo(() => createClient(), []);
-  const [user, setUser] = useState<any>(null);
+  const { user, profile } = useAuth();
   const [activeTab, setActiveTab] = useState<TabKey>("explore");
   const [battles, setBattles] = useState<Battle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,11 +148,7 @@ export default function ExploreDashboard() {
   // ── Initialize user & follows ──
   useEffect(() => {
     (async () => {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user || !user.id) {
-        console.warn("[Dashboard] No authenticated user or auth error:", authError?.message);
-        return;
-      }
+      if (!user || !user.id) return;
 
       // Validate UUID format before querying
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -159,8 +156,6 @@ export default function ExploreDashboard() {
         console.error("[Dashboard] Invalid user UUID format:", user.id);
         return;
       }
-
-      setUser(user);
 
       // Load follows — only if we have a valid user ID
       const { data: follows, error: followsError } = await supabase
@@ -178,7 +173,7 @@ export default function ExploreDashboard() {
         setFollowedUsers(new Set(validFollows));
       }
     })();
-  }, [supabase]);
+  }, [supabase, user]);
 
   // ── Fetch battles ──
   const fetchBattles = useCallback(async (page: number, tab: TabKey, append = false, isBackground = false) => {
@@ -239,7 +234,7 @@ export default function ExploreDashboard() {
 
     // Use abort signal instead of Promise.race to truly cancel hung requests
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout instead of 3s
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout for fallback
     
     // add abortSignal to the query execution
     const { data, error } = await query.abortSignal(controller.signal);
@@ -365,6 +360,7 @@ export default function ExploreDashboard() {
         id: challengeId,
         challenger_id: user.id,
         challenged_id: targetId,
+        challenger_username: profile?.username || "Jugador",
         timestamp: Date.now()
       }
     });
