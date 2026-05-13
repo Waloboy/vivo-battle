@@ -290,10 +290,6 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const { id } = React.use(params);
   // SafeHydrate in page.tsx guarantees this only runs in browser
   const supabase = useMemo(() => createClient(), []);
-
-  useEffect(() => {
-    supabase.realtime.connect();
-  }, [supabase]);
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [balance, setBalance] = useState(0);

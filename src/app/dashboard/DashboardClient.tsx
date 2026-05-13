@@ -65,10 +65,6 @@ function simulateViewers(battleId: string, scoreA: number, scoreB: number): numb
 export default function ExploreDashboard() {
   // SafeHydrate in page.tsx guarantees this only runs in browser
   const supabase = useMemo(() => createClient(), []);
-
-  useEffect(() => {
-    supabase.realtime.connect();
-  }, [supabase]);
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("explore");
   const [battles, setBattles] = useState<Battle[]>([]);

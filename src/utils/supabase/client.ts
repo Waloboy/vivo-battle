@@ -19,38 +19,11 @@ export function createClient() {
           params: {
             eventsPerSecond: 10,
           },
-          // Force native WebSocket transport — KILL REST/longpoll fallback
+          // Keep native WebSocket transport to prevent REST fallback
           transport: typeof window !== 'undefined' ? WebSocket : undefined,
         },
       }
     );
-
-    // ── Aggressive connection: force connect + visibilitychange listener ──
-    if (typeof window !== 'undefined') {
-      client.realtime.connect();
-
-      // Auto-reconnect when user returns to tab
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && client) {
-          const state = client.realtime.connectionState();
-          if (state !== 'open' && state !== 'connecting') {
-            console.warn('[VIVO Realtime] Socket closed — forcing reconnect...');
-            client.realtime.connect();
-          }
-        }
-      });
-
-      // Monitor connection state changes
-      client.realtime.onOpen(() => {
-        console.log('[VIVO Realtime] ✅ WebSocket OPEN');
-      });
-      client.realtime.onClose(() => {
-        console.warn('[VIVO Realtime] ⚠️ WebSocket CLOSED — will reconnect on visibility');
-      });
-      client.realtime.onError((err: any) => {
-        console.error('[VIVO Realtime] ❌ WebSocket ERROR:', err);
-      });
-    }
   }
   return client;
 }

@@ -131,6 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── refreshAuth: main entry point ───────────────────────────────────────
   const refreshAuth = useCallback(async () => {
     try {
+      if (!supabase || !supabase.auth) return;
       const { data: { session }, error } = await supabase.auth.getSession();
       
       if (session?.user) {
@@ -167,18 +168,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // 3. Intelligent Reload on Visibility Change
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        console.log("[Auth] App visible. Forcing auth refresh.");
-        refreshAuth();
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
     return () => {
       authListener.subscription.unsubscribe();
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refreshAuth, fetchProfile, supabase.auth, safeUpdateAuth, storeTokens]);
 
