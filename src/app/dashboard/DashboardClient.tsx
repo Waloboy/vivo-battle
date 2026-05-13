@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Eye, Plus, UserPlus, Check, Loader2, Flame, Zap, Search, Swords, Shuffle, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { useIsClient } from "@/hooks/useIsClient";
 
@@ -65,18 +64,8 @@ function simulateViewers(battleId: string, scoreA: number, scoreB: number): numb
 }
 
 export default function ExploreDashboard() {
-  // Hydration guard — prevents React Error #418
-  if (typeof window === 'undefined') return null;
   const isClient = useIsClient();
   const supabase = useMemo(() => createClient(), []);
-
-  useEffect(() => {
-    if (isClient) {
-      supabase.realtime.connect();
-    }
-  }, [isClient, supabase]);
-
-  const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("explore");
   const [battles, setBattles] = useState<Battle[]>([]);
@@ -149,17 +138,6 @@ export default function ExploreDashboard() {
           if (newBattle && newBattle.is_active) {
             setBattles(prev => [newBattle as Battle, ...prev].slice(0, 50));
           }
-        }
-      )
-      // Listen for challenges targeting the current user
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "challenges" },
-        (payload: any) => {
-          // We handle notification or redirection here if it's for us
-          // Note: Full challenge logic might be in a separate layout component, 
-          // but we ensure it's captured here for the dashboard.
-          console.log("New challenge detected:", payload.new);
         }
       )
       .subscribe();
@@ -379,8 +357,8 @@ export default function ExploreDashboard() {
     // Generar un ID predecible o único para el broadcast
     const challengeId = crypto.randomUUID();
 
-    // 1. Enviar Broadcast (Instantáneo, bypass de DB)
-    const channel = supabase.channel("global");
+    // 1. Enviar Broadcast vía global-sync (Instantáneo, bypass de DB)
+    const channel = supabase.channel("global-sync");
     await channel.send({
       type: "broadcast",
       event: "challenge",

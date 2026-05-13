@@ -19,9 +19,16 @@ export function createClient() {
           params: {
             eventsPerSecond: 10,
           },
+          // Force WebSocket transport — KILL REST/longpoll fallback
+          transport: (globalThis as any).WebSocket,
         },
       }
     );
+
+    // Force immediate WebSocket connection on creation (browser only)
+    if (typeof window !== 'undefined') {
+      client.realtime.connect();
+    }
   }
   return client;
 }

@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Swords, X, Wifi, WifiOff } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 interface IncomingChallenge {
@@ -14,7 +13,6 @@ interface IncomingChallenge {
 
 export function ChallengeNotification() {
   const supabase = useMemo(() => createClient(), []);
-  const router = useRouter();
   const [challenge, setChallenge] = useState<IncomingChallenge | null>(null);
   const [responding, setResponding] = useState(false);
   const [hidden, setHidden] = useState(false);
@@ -57,7 +55,7 @@ export function ChallengeNotification() {
       }
 
       const channel = supabase
-        .channel("global", {
+        .channel("global-sync", {
           config: { broadcast: { self: false } },
         })
         .on(
@@ -185,7 +183,7 @@ export function ChallengeNotification() {
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("focus", handleVisibility);
     };
-  }, [supabase, router, wakeCount]);
+  }, [supabase, wakeCount]);
 
   const handleAccept = async () => {
     if (!challenge || responding) return;
@@ -209,7 +207,7 @@ export function ChallengeNotification() {
     }
 
     // ⚡ Broadcast acceptance FIRST — fastest path for challenger
-    supabase.channel("global").send({
+    supabase.channel("global-sync").send({
       type: "broadcast",
       event: "CHALLENGE_ACCEPTED",
       payload: { battle_id: battle.id, challenger_id: challenge.challenger_id, challenged_id: user.id },
