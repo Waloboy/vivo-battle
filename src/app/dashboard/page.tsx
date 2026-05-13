@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense } from "react";
-import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
+import { SafeHydrate } from "@/components/SafeHydrate";
+import dynamic from "next/dynamic";
 
 const DashboardClient = dynamic(() => import("./DashboardClient"), {
   ssr: false,
@@ -21,8 +21,8 @@ const Fallback = () => (
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<Fallback />}>
+    <SafeHydrate fallback={<Fallback />}>
       <DashboardClient />
-    </Suspense>
+    </SafeHydrate>
   );
 }

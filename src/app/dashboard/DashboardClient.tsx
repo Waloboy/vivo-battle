@@ -63,16 +63,11 @@ function simulateViewers(battleId: string, scoreA: number, scoreB: number): numb
 }
 
 export default function ExploreDashboard() {
-  const [mounted, setMounted] = useState(false);
-  const supabase = useMemo(() => {
-    if (typeof window === 'undefined') return null as any;
-    return createClient();
-  }, []);
+  // SafeHydrate in page.tsx guarantees this only runs in browser
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
-    setMounted(true);
-    // Force WebSocket reconnect after mount
-    if (supabase) supabase.realtime.connect();
+    supabase.realtime.connect();
   }, [supabase]);
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("explore");
@@ -438,12 +433,7 @@ export default function ExploreDashboard() {
     }),
   };
 
-  // Hydration guard: render nothing until client-side mount
-  if (!mounted) return (
-    <div className="flex-1 w-full h-full min-h-screen flex items-center justify-center">
-      <Loader2 className="w-8 h-8 animate-spin text-[#ff007a]" />
-    </div>
-  );
+
 
   return (
     <div className="flex-1 w-full max-w-3xl mx-auto px-3 md:px-6 pb-8">

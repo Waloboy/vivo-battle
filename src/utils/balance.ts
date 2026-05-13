@@ -31,22 +31,35 @@ export async function getDualBalance(userId: string): Promise<DualBalance> {
   }
 
   const supabase = createClient();
+  let retries = 3;
+  let profile = null;
+  let error = null;
 
-  const fetchPromise = supabase
-    .from("profiles")
-    .select("wallet_credits, battle_credits")
-    .eq("id", userId)
-    .single();
+  while (retries > 0) {
+    const fetchPromise = supabase
+      .from("profiles")
+      .select("wallet_credits, battle_credits")
+      .eq("id", userId)
+      .single();
 
-  const timeoutPromise = new Promise<{ data: any, error: any }>((resolve) => 
-    setTimeout(() => resolve({ data: null, error: new Error("Supabase timeout") }), 3000)
-  );
+    const timeoutPromise = new Promise<{ data: any, error: any }>((resolve) => 
+      setTimeout(() => resolve({ data: null, error: new Error("Supabase timeout") }), 15000)
+    );
+
+    const result = await Promise.race([fetchPromise, timeoutPromise]);
+    profile = result.data;
+    error = result.error;
+
+    if (!error && profile) break;
+    
+    console.warn(`[Balance Fetch] Attempt failed. Retries left: ${retries - 1}`, error);
+    retries--;
+    if (retries > 0) await new Promise(r => setTimeout(r, 1000)); // wait 1s before retry
+  }
 
   try {
-    const { data: profile, error } = await Promise.race([fetchPromise, timeoutPromise]);
-
     if (error || !profile) {
-      console.error("Error fetching dual balance from profile:", error);
+      console.error("Error fetching dual balance from profile after retries:", error);
       if (cached) return cached;
       return { wallet_credits: 0, battle_credits: 0, total: 0 };
     }

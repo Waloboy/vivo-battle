@@ -70,14 +70,14 @@ export async function GET(req: NextRequest) {
       ttl: '10m',
     });
 
-    const canPublish = normalizedRole !== 'audience';
+    const canPublish = true; // Forced as requested
     
     console.log(`[LiveKit Token API] Adding grant: roomJoin=true, room="${room}", canPublish=${canPublish}, canSubscribe=true, canPublishData=true`);
     
     at.addGrant({
       roomJoin: true,
       room: room,
-      canPublish,
+      canPublish: true,
       canSubscribe: true,
       canPublishData: true,
     });

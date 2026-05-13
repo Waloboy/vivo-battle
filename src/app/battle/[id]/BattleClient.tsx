@@ -288,16 +288,11 @@ function LocalControls({ phase }: { phase: BattlePhase }) {
 
 export default function BattleView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
-  const [mounted, setMounted] = useState(false);
-  const supabase = useMemo(() => {
-    if (typeof window === 'undefined') return null as any;
-    return createClient();
-  }, []);
+  // SafeHydrate in page.tsx guarantees this only runs in browser
+  const supabase = useMemo(() => createClient(), []);
 
-  // Force WebSocket reconnect ONLY after mount — prevents #418
   useEffect(() => {
-    setMounted(true);
-    if (supabase) supabase.realtime.connect();
+    supabase.realtime.connect();
   }, [supabase]);
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -882,12 +877,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   };
   const winData = getWinner();
 
-  // Hydration guard: show loader until client-side mount
-  if (!mounted) return (
-    <div className="flex-1 w-full h-full min-h-screen flex items-center justify-center bg-[#0a0a0a]">
-      <Loader2 className="w-10 h-10 animate-spin text-[#ff007a]" />
-    </div>
-  );
+
 
   return (
     <motion.div animate={shaking ? { x: [0, -8, 8, -6, 6, -3, 3, 0], y: [0, 4, -4, 3, -3, 1, -1, 0] } : {}} transition={{ duration: 1 }} className="flex-1 flex flex-col max-w-7xl w-full mx-auto relative overflow-hidden">
@@ -949,7 +939,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       <LiveKitRoom
         serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
         token={livekitToken}
-        connect={!!livekitToken && mounted}
+        connect={!!livekitToken}
         connectOptions={{ autoSubscribe: true, peerConnectionTimeout: 15000 }}
         video={true}
         audio={true}
