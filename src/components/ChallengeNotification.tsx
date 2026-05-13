@@ -22,6 +22,8 @@ export function ChallengeNotification() {
   const userIdRef = useRef<string | null>(null);
   const channelRef = useRef<any>(null);
 
+  const [wakeCount, setWakeCount] = useState(0);
+
   useEffect(() => {
     let mounted = true;
 
@@ -83,6 +85,20 @@ export function ChallengeNotification() {
             }
           }
         )
+        // ⚡ BROADCAST HANDSHAKE: fastest path — both clients get this before DB
+        .on(
+          "broadcast",
+          { event: "CHALLENGE_ACCEPTED" },
+          (payload: any) => {
+            if (!mounted || !userIdRef.current) return;
+            const p = payload.payload;
+            if (p.challenger_id === userIdRef.current || p.challenged_id === userIdRef.current) {
+              console.log("[ChallengeNotification] ⚡ Broadcast ACCEPTED, redirecting...");
+              setHidden(true);
+              window.location.href = `/battle/${p.battle_id}`;
+            }
+          }
+        )
         // Keep DB fallback just in case we miss the broadcast (e.g., page refresh)
         .on(
           "postgres_changes",
@@ -130,7 +146,8 @@ export function ChallengeNotification() {
             if (!mounted || !userIdRef.current) return;
             if (payload.new.status === "accepted" && payload.new.battle_id) {
               setHidden(true);
-              router.push(`/battle/${payload.new.battle_id}`);
+              // Hard navigate — bypasses React hydration delays
+              window.location.assign(`/battle/${payload.new.battle_id}`);
             }
           }
         )
@@ -144,7 +161,7 @@ export function ChallengeNotification() {
               payload.new.player_b_id === userIdRef.current
             ) {
               setHidden(true);
-              router.push(`/battle/${payload.new.id}`);
+              window.location.assign(`/battle/${payload.new.id}`);
             }
           }
         )
@@ -159,14 +176,35 @@ export function ChallengeNotification() {
 
     setupRealtime();
 
+    // Resilience: ALWAYS re-subscribe on focus + force WS reconnect
+    const handleVisibility = () => {
+      if (document.hidden) return;
+      // Force Supabase Realtime WS reconnect if it dropped
+      try { (supabase as any).realtime?.connect(); } catch (_) {}
+
+      if (channelRef.current) {
+        const state = (channelRef.current as any).state;
+        if (state !== "joined") {
+          console.log(`[ChallengeNotification] Channel state='${state}', forcing re-subscribe...`);
+          setWakeCount(c => c + 1);
+        } else {
+          channelRef.current.subscribe();
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleVisibility);
+
     return () => {
       mounted = false;
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleVisibility);
     };
-  }, [supabase, router]);
+  }, [supabase, router, wakeCount]);
 
   const handleAccept = async () => {
     if (!challenge || responding) return;
@@ -189,7 +227,20 @@ export function ChallengeNotification() {
       return;
     }
 
-    await supabase
+    // ⚡ Broadcast acceptance FIRST — fastest path for challenger
+    supabase.channel("global-challenge-listener").send({
+      type: "broadcast",
+      event: "CHALLENGE_ACCEPTED",
+      payload: { battle_id: battle.id, challenger_id: challenge.challenger_id, challenged_id: user.id },
+    }).catch(() => {});
+
+    // Hard navigate — bypasses React hydration delays
+    setChallenge(null);
+    setResponding(false);
+    window.location.href = `/battle/${battle.id}`;
+
+    // Fire-and-forget: update challenge status in DB
+    supabase
       .from("challenges")
       .update({
         status: "accepted",
@@ -198,11 +249,8 @@ export function ChallengeNotification() {
         challenger_id: challenge.challenger_id,
         challenged_id: user.id,
       })
-      .eq("id", challenge.id);
-
-    setChallenge(null);
-    setResponding(false);
-    router.push(`/battle/${battle.id}`);
+      .eq("id", challenge.id)
+      .then(() => {});
   };
 
   const handleDecline = async () => {

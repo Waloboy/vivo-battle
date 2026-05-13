@@ -9,7 +9,16 @@ const nextConfig: NextConfig = {
       headers: [
         {
           key: 'Content-Security-Policy',
-          value: "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' 'self'; connect-src * 'unsafe-inline' wss: ws: https:; img-src * data: blob:; frame-src *; style-src * 'unsafe-inline';",
+          value: [
+            "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:",
+            "script-src * 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://vivo-battle-wy48g9g4.livekit.cloud https://zyrmgjkvojqfmhqammkl.supabase.co",
+            "connect-src * wss: ws: https: http: wss://vivo-battle-wy48g9g4.livekit.cloud wss://zyrmgjkvojqfmhqammkl.supabase.co",
+            "img-src * data: blob:",
+            "media-src * data: blob: mediastream:",
+            "worker-src * blob:",
+            "frame-src *",
+            "style-src * 'unsafe-inline'",
+          ].join("; ") + ";",
         },
         {
           key: 'Access-Control-Allow-Origin',

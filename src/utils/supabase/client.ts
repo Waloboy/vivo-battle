@@ -14,7 +14,12 @@ export function createClient() {
           autoRefreshToken: true,
           detectSessionInUrl: true,
           storage: typeof window !== 'undefined' ? window.localStorage : undefined
-        }
+        },
+        realtime: {
+          params: {
+            eventsPerSecond: 10,
+          },
+        },
       }
     );
   }

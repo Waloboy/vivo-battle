@@ -5,7 +5,7 @@ import { setLogLevel } from "livekit-client";
 
 setLogLevel("debug");
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Wallet, Gift, X, Heart, Mic, MicOff, RefreshCw, Trophy, Swords } from "lucide-react";
+import { Send, Wallet, Gift, X, Heart, Mic, MicOff, Trophy, Swords } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
@@ -64,20 +64,27 @@ function RoomWatcher({ playerA, playerB, onBothConnected, onOpponentGhost }: {
   return null;
 }
 
-function RoomDisconnectOnHide() {
+function RoomReconnectOnFocus({ onRequestNewToken }: { onRequestNewToken: () => void }) {
   const room = useRoomContext();
+  const connectionState = useConnectionState();
+
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.hidden) {
-        if (room && room.state !== "disconnected") {
-          console.log("[LiveKit] Disconnecting room on hide");
-          room.disconnect();
+      if (!document.hidden) {
+        // Tab regained focus — check if room is stuck
+        if (room && (room.state === "disconnected" || connectionState === "disconnected")) {
+          console.log("[LiveKit] Room disconnected on focus, requesting new token...");
+          onRequestNewToken();
         }
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [room]);
+    window.addEventListener("focus", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleVisibility);
+    };
+  }, [room, connectionState, onRequestNewToken]);
   return null;
 }
 
@@ -221,12 +228,11 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
   );
 }
 
-// --- LiveKit Local Controls (Mute & Flip Camera) ---
+// --- LiveKit Local Controls (Mic only — flip camera removed) ---
 function LocalControls({ phase }: { phase: BattlePhase }) {
   const isWarmup = phase === "PREPARING";
   const { localParticipant } = useLocalParticipant();
   const [isMuted, setIsMuted] = useState(false);
-  const [facingMode, setFacingMode] = useState<"user"|"environment">("user");
 
   useEffect(() => {
     if (localParticipant) {
@@ -248,20 +254,10 @@ function LocalControls({ phase }: { phase: BattlePhase }) {
     }
   };
 
-  const flipCamera = async () => {
-    const newMode = facingMode === "user" ? "environment" : "user";
-    await localParticipant.setCameraEnabled(false);
-    await localParticipant.setCameraEnabled(true, { facingMode: newMode });
-    setFacingMode(newMode);
-  };
-
   return (
-    <div className="absolute bottom-4 right-4 z-50 flex flex-col gap-3">
+    <div className="absolute bottom-4 right-4 z-50">
       <button onClick={toggleMute} className="w-10 h-10 rounded-full bg-black/60 backdrop-blur border border-white/20 flex items-center justify-center text-white hover:bg-black/80 transition-colors">
         {isMuted ? <MicOff size={18} className="text-red-400" /> : <Mic size={18} />}
-      </button>
-      <button onClick={flipCamera} className="w-10 h-10 rounded-full bg-black/60 backdrop-blur border border-white/20 flex items-center justify-center text-white hover:bg-black/80 transition-colors">
-        <RefreshCw size={18} />
       </button>
     </div>
   );
@@ -318,7 +314,9 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const pendingScoreB = useRef(0);
   const lastTapSound = useRef(0);
 
-  const phase: BattlePhase = !bothConnected || timeLeft > 195 ? "PREPARING" : 
+  // Phase is driven purely by server time — NOT by connection state
+  // bothConnected only controls whether the VS screen shows
+  const phase: BattlePhase = timeLeft > 195 ? "PREPARING" : 
                 (timeLeft > 15 ? "BATTLE" : 
                  timeLeft > 0 ? "ENDING" : "FINISHED");
 
@@ -420,19 +418,24 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       if (document.hidden) {
         // Stop fetching tokens or trying to reconnect
       } else {
-        // Re-fetch token only if we don't have one
-        if (!livekitToken) {
-           // It will trigger on next update
-           const fetchLkToken = async () => {
-             const { data: { session } } = await supabase.auth.getSession();
-             if (session?.user?.id) {
-               const res = await fetch(`/api/livekit/token?room=${id}&username=${profile?.username || session.user.id}`);
-               const data = await res.json();
-               if (data.token) setLivekitToken(data.token);
-             }
-           };
-           fetchLkToken();
-        }
+        // Tab regained focus — always force a fresh token to avoid stale WS
+        const fetchLkToken = async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.id) {
+              const uname = profile?.username || session.user.id;
+              const res = await fetch(`/api/livekit/token?room=${id}&username=${uname}&t=${Date.now()}`);
+              const data = await res.json();
+              if (data.token) {
+                console.log("[LiveKit] Fresh token obtained on focus");
+                setLivekitToken(data.token);
+              }
+            }
+          } catch (e) {
+            console.warn("[LiveKit] Token refresh failed, will retry", e);
+          }
+        };
+        fetchLkToken();
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -489,31 +492,65 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     };
   }, [id, supabase, router, wakeCount]);
 
-  // Generate LiveKit Token
-  useEffect(() => {
+  // Generate LiveKit Token with exponential retry
+  const lkRetryCount = useRef(0);
+  const fetchLivekitToken = React.useCallback(async () => {
     if (!profile || !id || !battleData) return;
-    (async () => {
-      const role = mySide === "Audience" ? "Audience" : "Publisher";
-      const res = await fetch(`/api/livekit/token?room=${id}&username=${profile.username}&role=${role}`);
+    const role = mySide === "Audience" ? "Audience" : "Publisher";
+    try {
+      const res = await fetch(`/api/livekit/token?room=${id}&username=${profile.username}&role=${role}&t=${Date.now()}`);
       const data = await res.json();
-      if (data.token) setLivekitToken(data.token);
-    })();
+      if (data.token) {
+        setLivekitToken(data.token);
+        lkRetryCount.current = 0;
+      } else {
+        throw new Error("No token in response");
+      }
+    } catch (e) {
+      lkRetryCount.current += 1;
+      const delay = Math.min(1000 * Math.pow(2, lkRetryCount.current), 15000);
+      console.warn(`[LiveKit] Token fetch failed, retry #${lkRetryCount.current} in ${delay}ms`);
+      setTimeout(fetchLivekitToken, delay);
+    }
   }, [profile, id, battleData, mySide]);
 
-  // Batch interval for score syncing
+  useEffect(() => {
+    fetchLivekitToken();
+  }, [fetchLivekitToken]);
+
+  // Score persistence refs for DB sync
+  const latestRawA = useRef(0);
+  const latestRawB = useRef(0);
+  useEffect(() => { latestRawA.current = rawA; }, [rawA]);
+  useEffect(() => { latestRawB.current = rawB; }, [rawB]);
+
+  // Batch interval: broadcast score deltas every 500ms + persist to DB every 5s
+  const dbSyncCounter = useRef(0);
   useEffect(() => {
     const syncInterval = setInterval(() => {
+      const ch = supabase.channel(`battle-${id}`);
       if (pendingScoreA.current > 0) {
-        supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "score", payload: { side: "A", amount: pendingScoreA.current } });
+        ch.send({ type: "broadcast", event: "score", payload: { side: "A", amount: pendingScoreA.current } });
         pendingScoreA.current = 0;
       }
       if (pendingScoreB.current > 0) {
-        supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "score", payload: { side: "B", amount: pendingScoreB.current } });
+        ch.send({ type: "broadcast", event: "score", payload: { side: "B", amount: pendingScoreB.current } });
         pendingScoreB.current = 0;
+      }
+      // Persist to DB every 2 seconds (4 * 500ms ticks)
+      dbSyncCounter.current += 1;
+      if (dbSyncCounter.current >= 4 && phase === "BATTLE") {
+        dbSyncCounter.current = 0;
+        supabase.from("battles").update({
+          score_a: latestRawA.current,
+          score_b: latestRawB.current,
+        }).eq("id", id).then(({ error }: { error: any }) => {
+          if (error) console.warn("[Score] DB sync error:", error.message);
+        });
       }
     }, 500);
     return () => clearInterval(syncInterval);
-  }, [id, supabase]);
+  }, [id, supabase, phase]);
 
   // Master Timer — anchored to server started_at, always ticks (no bothConnected gate)
   useEffect(() => {
@@ -548,6 +585,20 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
        supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "battle_start", payload: { started_at: newStart } });
     }
   }, [bothConnected, mySide, hasBroadcastedStart, id, battleData]);
+
+  // Auto-close failsafe: when timeLeft hits 0, force battle inactive in DB
+  // This covers the case where BOTH players disconnect
+  useEffect(() => {
+    if (phase === "FINISHED" && battleData?.id && (mySide === "A" || mySide === "B")) {
+      supabase.from("battles")
+        .update({ is_active: false, score_a: latestRawA.current, score_b: latestRawB.current })
+        .eq("id", id)
+        .eq("is_active", true) // only if not already closed
+        .then(({ error }: { error: any }) => {
+          if (!error) console.log("[Battle] ⏰ Auto-closed at time=0");
+        });
+    }
+  }, [phase, battleData?.id, mySide, id, supabase]);
 
   // Finished Logic + Point Settlement
   useEffect(() => {
@@ -787,12 +838,12 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     await supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "rematch_request", payload: { side: mySide } });
   };
 
-  const handleExitBattle = async () => {
-    // Broadcast exit to the opponent so they don't get stuck
-    await supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "battle_exit", payload: { side: mySide } });
-    // Both sides deactivate — whoever exits first kills the battle
-    await supabase.from("battles").update({ is_active: false }).eq("id", id);
+  const handleExitBattle = () => {
+    // Navigate FIRST — never wait on network for route changes
     router.push("/dashboard");
+    // Fire-and-forget: broadcast exit + deactivate battle
+    supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "battle_exit", payload: { side: mySide } }).catch(() => {});
+    supabase.from("battles").update({ is_active: false }).eq("id", id).then(() => {});
   };
 
   const getWinner = () => {
@@ -836,10 +887,12 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         {/* Timer Centered */}
         <div className="flex items-center justify-center">
           <div className="bg-black/80 border border-white/10 px-3 py-1 rounded-full">
-            <span className={`font-mono font-black text-xs tracking-widest ${isUrgent ? "text-red-500 animate-pulse" : "text-white/90"}`}>
-              {phase === "PREPARING" ? (bothConnected ? `INICIA ${fmtTime(displayTime)}` : "ESPERANDO...") : 
-               phase === "ENDING" ? `FIN ${fmtTime(displayTime)}` :
-               fmtTime(displayTime)}
+            <span className={`font-mono font-black text-xs tracking-widest ${isUrgent ? "text-red-500 animate-pulse" : isOpponentGhost ? "text-yellow-400 animate-pulse" : "text-white/90"}`}>
+              {phase === "PREPARING" 
+                ? (hasStartedBattle ? `INICIA ${fmtTime(displayTime)}` : bothConnected ? `INICIA ${fmtTime(displayTime)}` : "ESPERANDO...") 
+                : isOpponentGhost ? `RECONECTANDO... ${fmtTime(displayTime)}` 
+                : phase === "ENDING" ? `FIN ${fmtTime(displayTime)}` 
+                : fmtTime(displayTime)}
             </span>
           </div>
         </div>
@@ -866,7 +919,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         audio={true}
         className="flex flex-col flex-[4] min-h-0 relative"
       >
-        <RoomDisconnectOnHide />
+        <RoomReconnectOnFocus onRequestNewToken={fetchLivekitToken} />
         <RoomWatcher playerA={playerA?.username} playerB={playerB?.username} onBothConnected={setBothConnected} onOpponentGhost={setIsOpponentGhost} />
         
         {/* GLOBAL PANORAMIC OVERLAY FOR PREPARING — latched, never re-shows */}
@@ -1068,7 +1121,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
                     </h1>
                     {mySide === winData.side && (
                       <p className="text-sm font-bold text-[#00ffcc]">
-                        +{fmtBCR(rawA + rawB)} ganados
+                        +{fmtBCR(mySide === "A" ? rawA : rawB)} BCR ganados
                       </p>
                     )}
                     {mySide !== "Audience" && mySide !== winData.side && (
