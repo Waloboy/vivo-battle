@@ -7,9 +7,7 @@ setLogLevel("debug");
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Wallet, Gift, X, Heart, Mic, MicOff, Trophy, Swords, Loader2 } from "lucide-react";
 import confetti from "canvas-confetti";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { useIsClient } from "@/hooks/useIsClient";
 import { GIFT_CATALOG, type GiftKey } from "../gifts";
 import { useAnimatedCount } from "../useAnimatedCount";
 import { getWalletCredits } from "@/utils/balance";
@@ -289,18 +287,18 @@ function LocalControls({ phase }: { phase: BattlePhase }) {
 
 
 export default function BattleView({ params }: { params: Promise<{ id: string }> }) {
-  if (typeof window === 'undefined') return null;
   const { id } = React.use(params);
-  const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
+  const [mounted, setMounted] = useState(false);
+  const supabase = useMemo(() => {
+    if (typeof window === 'undefined') return null as any;
+    return createClient();
+  }, []);
 
-  // Hydration guard — prevents React Error #418
-  const isClient = useIsClient();
+  // Force WebSocket reconnect ONLY after mount — prevents #418
   useEffect(() => {
-    if (isClient) {
-      supabase.realtime.connect();
-    }
-  }, [isClient, supabase]);
+    setMounted(true);
+    if (supabase) supabase.realtime.connect();
+  }, [supabase]);
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [balance, setBalance] = useState(0);
@@ -499,9 +497,8 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
          setBattleData((prev: any) => ({ ...prev, started_at: payload.started_at }));
          setTimeLeft(calculateTimeLeft(payload.started_at));
       })
-      // Synchronized exit: opponent left or rejected rematch
       .on("broadcast", { event: "battle_exit" }, () => {
-         router.push("/dashboard");
+         window.location.href = "/dashboard";
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "battles", filter: `id=eq.${id}` }, (payload: any) => {
          if (payload.new.started_at) {
@@ -522,7 +519,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       supabase.removeChannel(ch); 
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [id, supabase, router, wakeCount]);
+  }, [id, supabase, wakeCount]);
 
   // Generate LiveKit Token with exponential retry
   const lkRetryCount = useRef(0);
@@ -735,7 +732,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     }
 
     // FINISHED phase: no auto-redirect, static modal handles navigation
-  }, [phase, timeLeft, isFinishedLocally, hasSettledPoints, mySide, id, router, supabase, rawA, rawB, battleData]);
+  }, [phase, timeLeft, isFinishedLocally, hasSettledPoints, mySide, id, supabase, rawA, rawB, battleData]);
 
   // Rematch Acceptance Logic
   useEffect(() => {
@@ -871,11 +868,11 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   };
 
   const handleExitBattle = () => {
-    // Navigate FIRST — never wait on network for route changes
-    router.push("/dashboard");
     // Fire-and-forget: broadcast exit + deactivate battle
     supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "battle_exit", payload: { side: mySide } }).catch(() => {});
     supabase.from("battles").update({ is_active: false }).eq("id", id).then(() => {});
+    // Navigate LAST via hard redirect — bypasses React hydration delays
+    window.location.href = "/dashboard";
   };
 
   const getWinner = () => {
@@ -885,8 +882,12 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   };
   const winData = getWinner();
 
-  // Hydration guard: render nothing until client-side mount
-  if (!isClient) return null;
+  // Hydration guard: show loader until client-side mount
+  if (!mounted) return (
+    <div className="flex-1 w-full h-full min-h-screen flex items-center justify-center bg-[#0a0a0a]">
+      <Loader2 className="w-10 h-10 animate-spin text-[#ff007a]" />
+    </div>
+  );
 
   return (
     <motion.div animate={shaking ? { x: [0, -8, 8, -6, 6, -3, 3, 0], y: [0, 4, -4, 3, -3, 1, -1, 0] } : {}} transition={{ duration: 1 }} className="flex-1 flex flex-col max-w-7xl w-full mx-auto relative overflow-hidden">
@@ -948,7 +949,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       <LiveKitRoom
         serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
         token={livekitToken}
-        connect={!!livekitToken && isClient}
+        connect={!!livekitToken && mounted}
         connectOptions={{ autoSubscribe: true, peerConnectionTimeout: 15000 }}
         video={true}
         audio={true}

@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Eye, Plus, UserPlus, Check, Loader2, Flame, Zap, Search, Swords, Shuffle, X } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
-import { useIsClient } from "@/hooks/useIsClient";
 
 // ── Types ──
 interface BattleProfile {
@@ -64,8 +63,17 @@ function simulateViewers(battleId: string, scoreA: number, scoreB: number): numb
 }
 
 export default function ExploreDashboard() {
-  const isClient = useIsClient();
-  const supabase = useMemo(() => createClient(), []);
+  const [mounted, setMounted] = useState(false);
+  const supabase = useMemo(() => {
+    if (typeof window === 'undefined') return null as any;
+    return createClient();
+  }, []);
+
+  useEffect(() => {
+    setMounted(true);
+    // Force WebSocket reconnect after mount
+    if (supabase) supabase.realtime.connect();
+  }, [supabase]);
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("explore");
   const [battles, setBattles] = useState<Battle[]>([]);
@@ -431,7 +439,11 @@ export default function ExploreDashboard() {
   };
 
   // Hydration guard: render nothing until client-side mount
-  if (!isClient) return null;
+  if (!mounted) return (
+    <div className="flex-1 w-full h-full min-h-screen flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-[#ff007a]" />
+    </div>
+  );
 
   return (
     <div className="flex-1 w-full max-w-3xl mx-auto px-3 md:px-6 pb-8">
