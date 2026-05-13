@@ -195,8 +195,55 @@ export function ChallengeNotification() {
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("focus", handleVisibility);
 
+    // ── POLLING FALLBACK: if WS is dead, "look" manually every 3s ──
+    const pollInterval = setInterval(async () => {
+      if (!userIdRef.current) return;
+      // Skip polling if channel is alive
+      const chState = (channelRef.current as any)?.state;
+      if (chState === "joined") return;
+
+      console.log("[ChallengeNotification] WS down, polling fallback...");
+      try {
+        // Check for pending challenges
+        const { data: pending } = await supabase
+          .from("challenges")
+          .select("id, challenger_id, status, battle_id, profiles!challenges_challenger_id_fkey(username)")
+          .eq("challenged_id", userIdRef.current)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (pending && pending.length > 0 && mounted) {
+          const c = pending[0];
+          setChallenge(prev => {
+            if (prev?.id === c.id) return prev;
+            return {
+              id: c.id,
+              challenger_id: c.challenger_id,
+              challenger_username: (c as any).profiles?.username || "???",
+            };
+          });
+          setHidden(false);
+        }
+
+        // Check if any of MY challenges got accepted (challenger redirect)
+        const { data: accepted } = await supabase
+          .from("challenges")
+          .select("id, battle_id")
+          .eq("challenger_id", userIdRef.current)
+          .eq("status", "accepted")
+          .order("resolved_at", { ascending: false })
+          .limit(1);
+
+        if (accepted && accepted.length > 0 && accepted[0].battle_id && mounted) {
+          window.location.href = `/battle/${accepted[0].battle_id}`;
+        }
+      } catch (_) {}
+    }, 3000);
+
     return () => {
       mounted = false;
+      clearInterval(pollInterval);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;

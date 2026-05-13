@@ -64,6 +64,10 @@ function simulateViewers(battleId: string, scoreA: number, scoreB: number): numb
 }
 
 export default function ExploreDashboard() {
+  // Hydration guard — prevents React Error #418
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => { setIsClient(true); }, []);
+
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -440,6 +444,9 @@ export default function ExploreDashboard() {
       },
     }),
   };
+
+  // Hydration guard: render nothing until client-side mount
+  if (!isClient) return <div className="flex-1 w-full" />;
 
   return (
     <div className="flex-1 w-full max-w-3xl mx-auto px-3 md:px-6 pb-8">

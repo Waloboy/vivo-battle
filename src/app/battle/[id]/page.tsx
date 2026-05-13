@@ -233,13 +233,36 @@ function LocalControls({ phase }: { phase: BattlePhase }) {
   const isWarmup = phase === "PREPARING";
   const { localParticipant } = useLocalParticipant();
   const [isMuted, setIsMuted] = useState(false);
+  const cameraRetryRef = useRef(0);
 
   useEffect(() => {
-    if (localParticipant) {
-      const shouldCamera = phase !== "PREPARING";
-      localParticipant.setCameraEnabled(shouldCamera, { facingMode: "user" }).catch(e => console.error("Auto camera error:", e));
-      localParticipant.setMicrophoneEnabled(true).catch(e => console.error("Auto mic error:", e));
-    }
+    if (!localParticipant) return;
+    cameraRetryRef.current = 0;
+
+    // Mic — fire and forget
+    localParticipant.setMicrophoneEnabled(true)
+      .catch(e => console.warn("[Mic] Failed (non-blocking):", e.message));
+
+    // Camera — retry up to 3 times with 3s gap, NEVER block the app
+    const shouldCamera = phase !== "PREPARING";
+    if (!shouldCamera) return;
+
+    const tryCamera = async () => {
+      try {
+        await localParticipant.setCameraEnabled(true, { facingMode: "user" });
+        console.log("[Camera] Enabled successfully");
+        cameraRetryRef.current = 0;
+      } catch (e: any) {
+        cameraRetryRef.current += 1;
+        console.warn(`[Camera] Attempt ${cameraRetryRef.current} failed: ${e.message}`);
+        if (cameraRetryRef.current < 3) {
+          setTimeout(tryCamera, 3000);
+        } else {
+          console.warn("[Camera] All retries exhausted — continuing without video");
+        }
+      }
+    };
+    tryCamera();
   }, [localParticipant, phase]);
 
   if (isWarmup || !localParticipant) return null;
@@ -268,6 +291,10 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const { id } = React.use(params);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+
+  // Hydration guard — prevents React Error #418
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => { setIsClient(true); }, []);
   
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -853,6 +880,9 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   };
   const winData = getWinner();
 
+  // Hydration guard: render nothing until client-side mount
+  if (!isClient) return <div className="flex-1 flex flex-col items-center justify-center"><div className="w-8 h-8 border-2 border-white/10 border-t-[#00d1ff] rounded-full animate-spin" /></div>;
+
   return (
     <motion.div animate={shaking ? { x: [0, -8, 8, -6, 6, -3, 3, 0], y: [0, 4, -4, 3, -3, 1, -1, 0] } : {}} transition={{ duration: 1 }} className="flex-1 flex flex-col max-w-7xl w-full mx-auto relative overflow-hidden">
       <AnimatePresence>
@@ -913,8 +943,8 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       <LiveKitRoom
         serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
         token={livekitToken}
-        connect={!!livekitToken}
-        connectOptions={{ autoSubscribe: true }}
+        connect={!!livekitToken && isClient}
+        connectOptions={{ autoSubscribe: true, peerConnectionTimeout: 15000 }}
         video={true}
         audio={true}
         className="flex flex-col flex-[4] min-h-0 relative"
