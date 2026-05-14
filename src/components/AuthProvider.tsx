@@ -4,7 +4,6 @@ import {
   createContext, useContext, useEffect,
   useState, useMemo, useCallback, useRef
 } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -28,7 +27,6 @@ export const useAuth = () => useContext(AuthContext);
 
 // ─── Component ──────────────────────────────────────────────────────────────
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
   // ── HYDRATION-SAFE: Always start with null/true ──
@@ -174,11 +172,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     // Step 4: CENTRALIZED Visibility Change Handler
-    // This is THE fix for zombie state — one handler for the entire app
+    // Silently re-fetch auth data + reconnect Supabase realtime when tab returns.
+    // NO router.refresh(), NO window.location.reload() — those cause 404 / infinite loops.
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        router.refresh();
+      if (document.visibilityState !== "visible") return;
+
+      console.log("[Auth] Tab visible — re-fetching auth + reconnecting realtime");
+
+      // Re-validate session silently (won't wipe state on network error)
+      refreshAuth();
+
+      // Reconnect Supabase WebSocket if it died while tab was hidden
+      if (supabase.realtime) {
+        try {
+          const state = supabase.realtime.connectionState();
+          if (state !== "open" && state !== "connecting") {
+            console.log("[Auth] WebSocket was", state, "— reconnecting...");
+            supabase.realtime.connect();
+          }
+        } catch (e) {
+          console.warn("[Auth] realtime reconnect failed:", e);
+        }
       }
+
+      // Notify child components to re-fetch their data
+      window.dispatchEvent(new Event("vivo_wakeup"));
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);

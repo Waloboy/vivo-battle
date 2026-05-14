@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
+  skipTrailingSlashRedirect: true,
   allowedDevOrigins: ['192.168.10.123', 'localhost:3000'],
   async headers() {
     return [
@@ -19,16 +20,9 @@ const nextConfig = {
           { key: 'Access-Control-Allow-Origin', value: '*' },
         ],
       },
-      {
-        source: '/sw-auth.js',
-        headers: [
-          { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
-          { key: 'Service-Worker-Allowed', value: '/' },
-        ],
-      },
       // ── Application pages: permissive CSP for Supabase Realtime + LiveKit ──
       {
-        source: '/:path((?!manifest\\.json|assets|sw-auth\\.js|favicon\\.ico|_next).*)',
+        source: '/:path((?!manifest\\.json|assets|favicon\\.ico|_next).*)',
         headers: [
           {
             key: 'Content-Security-Policy',

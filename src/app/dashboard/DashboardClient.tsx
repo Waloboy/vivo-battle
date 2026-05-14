@@ -99,12 +99,9 @@ export default function ExploreDashboard() {
     let timer: NodeJS.Timeout;
     if (loading) {
       timer = setTimeout(() => {
+        // Force-release spinner after 2.5s — no reload, just show empty state
         setLoading(false);
-        // "Si la página carga y no hay una respuesta de Supabase en 5 segundos, debe forzar un reset del estado de hidratación."
-        if (battles.length === 0) {
-          window.location.reload();
-        }
-      }, 5000);
+      }, 2500);
     }
     return () => clearTimeout(timer);
   }, [loading, battles.length]);

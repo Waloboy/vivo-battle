@@ -55,11 +55,10 @@ export const config = {
      * - _next/image (image optimization)
      * - favicon.ico (favicon)
      * - manifest.json (PWA manifest — MUST be public, no auth)
-     * - sw-auth.js (service worker — MUST be public, no auth)
      * - assets/ (logos, images, sounds — MUST be public, no auth)
      * - sounds/ (audio files — MUST be public, no auth)
      * - *.svg, *.png, *.jpg, *.ico, *.webp (static images)
      */
-    '/((?!_next/static|_next/image|favicon\\.ico|manifest\\.json|sw-auth\\.js|assets/|sounds/|.*\\.(?:svg|png|jpg|jpeg|gif|ico|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon\\.ico|manifest\\.json|assets/|sounds/|.*\\.(?:svg|png|jpg|jpeg|gif|ico|webp)$).*)',
   ],
 }
