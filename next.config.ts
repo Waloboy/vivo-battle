@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ['192.168.10.123', 'localhost:3000'],
   async headers() {
     return [{
-      source: '/(.*)',
+      source: '/:path*',
       headers: [
         {
           key: 'Content-Security-Policy',
