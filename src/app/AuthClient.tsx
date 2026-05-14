@@ -64,9 +64,9 @@ export default function AuthClient() {
       >
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center p-4 rounded-2xl bg-gradient-to-br from-[#ff007a] to-[#00d1ff] mb-4 opacity-90">
-            <Swords size={48} className="text-white" />
+            <img src="/assets/images/logo-192.png" alt="ARENA 58 Logo" className="w-12 h-12 object-contain" />
           </div>
-          <h1 className="text-4xl font-black tracking-tighter text-gradient">VIVO BATTLE</h1>
+          <h1 className="text-4xl font-black tracking-tighter text-gradient">ARENA 58</h1>
           <p className="text-white/60 mt-2">La app de batallas 1vs1</p>
         </div>
 

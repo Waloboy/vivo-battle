@@ -64,10 +64,10 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
         <Link href={user ? "/dashboard" : "/"} className="flex items-center gap-2 group">
           <div className="p-2 rounded-lg bg-gradient-to-br from-[#ff007a] to-[#00d1ff] opacity-80 group-hover:opacity-100 transition-opacity">
-            <Swords size={20} className="text-white" />
+            <img src="/assets/images/logo-192.png" alt="ARENA 58 Logo" className="w-5 h-5 object-contain" />
           </div>
           <span className="font-black text-xl tracking-tight text-gradient hidden sm:flex items-center gap-2">
-            VIVO BATTLE
+            ARENA 58
             {loading && <div className="w-3 h-3 rounded-full border-2 border-[#00d1ff] border-t-transparent animate-spin ml-2" />}
           </span>
         </Link>

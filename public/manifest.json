@@ -1,0 +1,21 @@
+{
+  "name": "ARENA 58",
+  "short_name": "ARENA 58",
+  "description": "La app de batallas 1vs1",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#00d1ff",
+  "icons": [
+    {
+      "src": "/assets/images/logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/images/logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

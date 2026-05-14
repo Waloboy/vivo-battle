@@ -1,4 +1,4 @@
--- Supabase Schema for VIVO BATTLE
+-- Supabase Schema for ARENA 58
 
 -- 1. Profiles
 CREATE TABLE public.profiles (

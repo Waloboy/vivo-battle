@@ -167,7 +167,7 @@ export default function RankingPage() {
           <h1 className="text-2xl md:text-3xl font-black italic tracking-tight uppercase text-transparent bg-clip-text bg-gradient-to-r from-[#ffd700] via-[#ffaa00] to-[#ff5500]">
             Ranking Mundial
           </h1>
-          <p className="text-white/40 text-[10px] font-bold uppercase tracking-[0.2em]">Top 100 Leyendas de VIVO</p>
+          <p className="text-white/40 text-[10px] font-bold uppercase tracking-[0.2em]">Top 100 Leyendas de ARENA 58</p>
         </div>
         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#ffd700]/20 to-transparent flex items-center justify-center border border-[#ffd700]/30 shadow-[0_0_20px_rgba(255,215,0,0.2)]">
           <Trophy size={24} color="#ffd700" />

@@ -1,7 +1,7 @@
 import { createClient } from "./supabase/client";
 
 /**
- * Dual Credit System for VIVO Battle
+ * Dual Credit System for ARENA 58
  *
  * WCR (Wallet Credits) — from deposits. Used to buy gifts.
  *   Income:  deposit, manual_adjustment

@@ -1,5 +1,5 @@
 /**
- * Shared number formatting utilities for VIVO Battle.
+ * Shared number formatting utilities for ARENA 58.
  *
  * Rules:
  *  - CR / Bs  → Venezuelan locale: 1.250,50  (dot = thousands, comma = decimal)
