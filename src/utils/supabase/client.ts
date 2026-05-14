@@ -26,10 +26,24 @@ export function createClient() {
         global: {
           headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
         }
-        // Se eliminó la configuración manual de realtime para permitir
-        // que Supabase gestione las reconexiones automáticas al cambiar de app.
       }
     );
+
+    // ── Realtime Auto-Reconnect Timer ──
+    // If the WebSocket dies (mobile network switch, sleep, etc.),
+    // attempt to reconnect every 3 seconds instead of staying dead.
+    setInterval(() => {
+      if (!client?.realtime) return;
+      try {
+        const state = client.realtime.connectionState();
+        if (state !== 'open' && state !== 'connecting') {
+          console.log('[Supabase] WebSocket dead (' + state + ') — auto-reconnecting...');
+          client.realtime.connect();
+        }
+      } catch (e) {
+        // connectionState() may throw if realtime isn't initialized yet — safe to ignore
+      }
+    }, 3000);
   }
   return client;
 }
