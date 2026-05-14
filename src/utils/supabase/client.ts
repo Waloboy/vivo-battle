@@ -22,6 +22,9 @@ export function createClient() {
           persistSession: true,
           autoRefreshToken: true,
           detectSessionInUrl: true,
+        },
+        global: {
+          headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
         }
         // Se eliminó la configuración manual de realtime para permitir
         // que Supabase gestione las reconexiones automáticas al cambiar de app.

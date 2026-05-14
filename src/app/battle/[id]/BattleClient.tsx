@@ -81,11 +81,12 @@ function RoomReconnectOnFocus({ onRequestNewToken, livekitToken }: { onRequestNe
   useEffect(() => {
     if (!room) return;
 
-    const handleVisibility = () => {
+    const handleVisibility = async () => {
       if (!document.hidden) {
         // Tab regained focus
         if (room.state === "disconnected" || connectionState === "disconnected") {
           console.log("[LiveKit] Room disconnected on focus.");
+          await room.disconnect();
           if (isTokenExpired(livekitToken)) {
             console.log("[LiveKit] Token expired, requesting new token...");
             onRequestNewToken();
@@ -106,9 +107,11 @@ function RoomReconnectOnFocus({ onRequestNewToken, livekitToken }: { onRequestNe
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("focus", handleVisibility);
 
-    const handleDisconnect = () => {
+    const handleDisconnect = async () => {
       console.log("[LiveKit] RoomEvent.Disconnected triggered.");
       if (document.hidden) return; // If hidden, wait for visibilitychange
+      
+      await room.disconnect();
       
       if (isTokenExpired(livekitToken)) {
         onRequestNewToken();

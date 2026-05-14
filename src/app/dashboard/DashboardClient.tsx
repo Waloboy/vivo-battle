@@ -162,7 +162,7 @@ export default function ExploreDashboard() {
         { event: "CHALLENGE_ACCEPTED" },
         (payload: any) => {
           if (payload.payload.challenger_id === user.id) {
-            window.location.assign('/battle/' + payload.payload.battle_id);
+            window.location.assign('/arena/' + payload.payload.battle_id);
           }
         }
       )
@@ -449,7 +449,7 @@ export default function ExploreDashboard() {
       await supabase.from("matchmaking_queue").delete().eq("user_id", user.id);
       await supabase.from("matchmaking_queue").delete().eq("user_id", opponent.user_id);
       setMatchmaking(false);
-      if (battle) window.location.href = `/battle/${battle.id}`;
+      if (battle) window.location.href = `/arena/${battle.id}`;
     } else {
       // Wait for match via polling (simple approach)
       const interval = setInterval(async () => {
@@ -457,7 +457,7 @@ export default function ExploreDashboard() {
         if (!myEntry) { clearInterval(interval); setMatchmaking(false); return; }
         // Check if someone created a battle with us
         const { data: newBattle } = await supabase.from("battles").select("id").or(`player_a_id.eq.${user.id},player_b_id.eq.${user.id}`).eq("is_active", true).order("started_at", { ascending: false }).limit(1).single();
-        if (newBattle) { clearInterval(interval); await supabase.from("matchmaking_queue").delete().eq("user_id", user.id); setMatchmaking(false); window.location.href = `/battle/${newBattle.id}`; }
+        if (newBattle) { clearInterval(interval); await supabase.from("matchmaking_queue").delete().eq("user_id", user.id); setMatchmaking(false); window.location.href = `/arena/${newBattle.id}`; }
       }, 3000);
       // Auto-cancel after 30s
       setTimeout(async () => { clearInterval(interval); await supabase.from("matchmaking_queue").delete().eq("user_id", user.id); setMatchmaking(false); }, 30000);
@@ -612,7 +612,7 @@ export default function ExploreDashboard() {
                 >
                   <div className="rounded-2xl overflow-hidden border border-white/[0.06] bg-white/[0.02] hover:border-white/15 transition-all duration-300 hover:shadow-[0_0_30px_rgba(255,0,122,0.08)]">
                     {/* ── Thumbnail Area ── */}
-                    <Link href={`/battle/${battle.id}`} className="block">
+                    <Link href={`/arena/${battle.id}`} className="block">
                       <div
                         className="relative aspect-[4/5] overflow-hidden cursor-pointer"
                         style={

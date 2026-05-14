@@ -82,8 +82,8 @@ export function Navbar() {
               <span className="hidden sm:block">Explorar</span>
             </Link>
             <Link 
-              href="/battle" 
-              className={`flex items-center gap-2 transition-colors ${pathname === '/battle' || pathname.startsWith('/battle/') ? 'text-white' : 'text-white/50 hover:text-white'}`}
+              href="/arena" 
+              className={`flex items-center gap-2 transition-colors ${pathname === '/arena' || pathname.startsWith('/arena/') ? 'text-white' : 'text-white/50 hover:text-white'}`}
             >
               <Swords size={18} />
               <span className="hidden sm:block">Batallas</span>

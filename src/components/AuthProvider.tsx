@@ -169,28 +169,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Step 4: CENTRALIZED Visibility Change Handler
     // This is THE fix for zombie state — one handler for the entire app
     const handleVisibilityChange = () => {
-      if (document.visibilityState !== "visible") return;
-
-      console.log("[Auth] Tab became visible — refreshing session & WebSocket");
-
-      // Re-validate session (won't wipe state on network error)
-      refreshAuth();
-
-      // Reconnect WebSocket if it died while tab was hidden
-      if (supabase.realtime) {
-        try {
-          const state = supabase.realtime.connectionState();
-          if (state !== "open" && state !== "connecting") {
-            console.log("[Auth] WebSocket was", state, "— reconnecting...");
-            supabase.realtime.connect();
-          }
-        } catch (e) {
-          console.warn("[Auth] realtime state check failed:", e);
-        }
+      if (document.visibilityState === "visible") {
+        window.location.reload();
       }
-
-      // Notify ALL child components to re-fetch their data
-      window.dispatchEvent(new Event("vivo_wakeup"));
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
