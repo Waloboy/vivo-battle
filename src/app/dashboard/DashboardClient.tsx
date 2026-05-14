@@ -88,12 +88,26 @@ export default function ExploreDashboard() {
   const [wakeCount, setWakeCount] = useState(0);
 
   useEffect(() => {
+    // LIMPIEZA DE ESTADO AL CARGAR
+    try {
+      sessionStorage.removeItem("vivo_battle_loading");
+      localStorage.removeItem("vivo_battle_loading");
+      sessionStorage.clear();
+      localStorage.removeItem("supabase-auth-token-loading");
+    } catch (e) {}
+
     let timer: NodeJS.Timeout;
     if (loading) {
-      timer = setTimeout(() => setLoading(false), 3000);
+      timer = setTimeout(() => {
+        setLoading(false);
+        // "Si la página carga y no hay una respuesta de Supabase en 5 segundos, debe forzar un reset del estado de hidratación."
+        if (battles.length === 0) {
+          window.location.reload();
+        }
+      }, 5000);
     }
     return () => clearTimeout(timer);
-  }, [loading]);
+  }, [loading, battles.length]);
 
   useEffect(() => {
     const onWake = () => setWakeCount(c => c + 1);
@@ -148,7 +162,7 @@ export default function ExploreDashboard() {
         { event: "CHALLENGE_ACCEPTED" },
         (payload: any) => {
           if (payload.payload.challenger_id === user.id) {
-            window.location.href = `/battle/${payload.payload.battle_id}`;
+            window.location.assign('/battle/' + payload.payload.battle_id);
           }
         }
       )
@@ -402,6 +416,18 @@ export default function ExploreDashboard() {
 
     setChallengeSent(prev => new Set(prev).add(targetId));
     setChallengeSending(null);
+
+    // TIMEOUT DE PROTECCIÓN: Revertir a "Retar" si se queda colgado 30s
+    setTimeout(() => {
+      setChallengeSent(prev => {
+        const next = new Set(prev);
+        if (next.has(targetId)) {
+          next.delete(targetId);
+        }
+        return next;
+      });
+      setChallengeSending(null);
+    }, 30000);
   };
 
   // ── Random matchmaking ──

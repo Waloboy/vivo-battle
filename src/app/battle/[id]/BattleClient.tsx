@@ -369,6 +369,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const [hasSettledPoints, setHasSettledPoints] = useState(false);
   // One-way latch: once battle leaves PREPARING, VS screen never comes back
   const [hasStartedBattle, setHasStartedBattle] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Batching logic for performance
   const pendingScoreA = useRef(0);
@@ -434,6 +435,14 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         if (isMounted) setBalance(b);
 
         const { data: battle } = await supabase.from("battles").select("*").eq("id", id).abortSignal(signal).single();
+        if (!battle) {
+          if (isMounted) {
+            setIsLoading(false);
+            setIsFinishedLocally(true); // Treat as finished if missing
+          }
+          return;
+        }
+
         if (battle && isMounted) {
           setBattleData(battle);
 
@@ -470,6 +479,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
           console.warn("Battle load timeout aborted.");
         }
       } finally {
+        if (isMounted) setIsLoading(false);
         clearTimeout(timeoutId);
       }
     };
@@ -477,10 +487,6 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
 
     const ch = supabase.channel(`battle-${id}`)
       .on("broadcast", { event: "chat" }, ({ payload }: { payload: any }) => setMessages(p => [...p, payload]))
-      .on("broadcast", { event: "score" }, ({ payload }: { payload: any }) => {
-        if (payload.side === "A") setRawA(p => p + payload.amount);
-        else setRawB(p => p + payload.amount);
-      })
       .on("broadcast", { event: "rematch_request" }, ({ payload }: { payload: any }) => {
          if (payload.side === "A") setRematchA(true);
          if (payload.side === "B") setRematchB(true);
@@ -532,11 +538,20 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const lkRetryCount = useRef(0);
   const fetchLivekitToken = React.useCallback(async () => {
     if (!profile || !id || !battleData) return "";
+
+    const cachedToken = sessionStorage.getItem(`livekit_token_${id}`);
+    if (cachedToken && !isTokenExpired(cachedToken)) {
+      setLivekitToken(cachedToken);
+      lkRetryCount.current = 0;
+      return cachedToken;
+    }
+
     const role = mySide === "Audience" ? "Audience" : "Publisher";
     try {
       const res = await fetch(`/api/livekit/token?room=${id}&username=${profile.username}&role=${role}&t=${Date.now()}`);
       const data = await res.json();
       if (data.token) {
+        sessionStorage.setItem(`livekit_token_${id}`, data.token);
         setLivekitToken(data.token);
         lkRetryCount.current = 0;
         return data.token;
@@ -566,28 +581,21 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const dbSyncCounter = useRef(0);
   useEffect(() => {
     const syncInterval = setInterval(() => {
-      // Find the existing channel instead of creating a new one
-      const existingChannel = supabase.getChannels().find((c: any) => c.topic === `realtime:battle-${id}`);
-      if (existingChannel) {
-        if (pendingScoreA.current > 0) {
-          existingChannel.send({ type: "broadcast", event: "score", payload: { side: "A", amount: pendingScoreA.current } });
-          pendingScoreA.current = 0;
-        }
-        if (pendingScoreB.current > 0) {
-          existingChannel.send({ type: "broadcast", event: "score", payload: { side: "B", amount: pendingScoreB.current } });
-          pendingScoreB.current = 0;
-        }
+      if (pendingScoreA.current > 0) {
+        supabase.rpc('add_battle_points', {
+          p_battle_id: id,
+          p_side: 'A',
+          p_points: pendingScoreA.current
+        }).catch(console.error);
+        pendingScoreA.current = 0;
       }
-      // Persist to DB every 2 seconds (4 * 500ms ticks)
-      dbSyncCounter.current += 1;
-      if (dbSyncCounter.current >= 4 && phase === "BATTLE") {
-        dbSyncCounter.current = 0;
-        supabase.from("battles").update({
-          score_a: latestRawA.current,
-          score_b: latestRawB.current,
-        }).eq("id", id).then(({ error }: { error: any }) => {
-          if (error) console.warn("[Score] DB sync error:", error.message);
-        });
+      if (pendingScoreB.current > 0) {
+        supabase.rpc('add_battle_points', {
+          p_battle_id: id,
+          p_side: 'B',
+          p_points: pendingScoreB.current
+        }).catch(console.error);
+        pendingScoreB.current = 0;
       }
     }, 500);
     return () => clearInterval(syncInterval);
@@ -798,11 +806,11 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     
     if (side === "A") { 
       setTapsA(p => [...p.slice(-7), tap]); 
-      setRawA(p => p + 1);
+      // Removed setRawA directly: UI reacts exclusively via Postgres Realtime / Broadcasts
       pendingScoreA.current += 1;
     } else { 
       setTapsB(p => [...p.slice(-7), tap]); 
-      setRawB(p => p + 1);
+      // Removed setRawB directly: UI reacts exclusively via Postgres Realtime / Broadcasts
       pendingScoreB.current += 1;
     }
   };
@@ -875,8 +883,12 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       if (gift.tier === 3) { fireSupremeConfetti(); triggerShake(8, 1000); flashGlow(side); setTakeover({ username: profile.username, label: gift.label, color: gift.color }); setTimeout(() => setTakeover(null), 3000); } 
       else flashGlow(side);
       
-      if (side === "A") { setRawA(p => p + gift.cost); pendingScoreA.current += gift.cost; }
-      else { setRawB(p => p + gift.cost); pendingScoreB.current += gift.cost; }
+      // Update points exclusively via RPC + Realtime reaction
+      await supabase.rpc('add_battle_points', {
+        p_battle_id: id,
+        p_side: side,
+        p_points: gift.cost
+      });
       
       const msg = { id: Date.now(), username: profile.username, text: `sent ${gift.label} (${fmtWCR(gift.cost)})`, isGift: true, color: gift.color, tier: gift.tier };
       await sendBattleBroadcast("chat", msg);
@@ -915,7 +927,14 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   };
   const winData = getWinner();
 
-
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-[#0d0008] text-white">
+        <Loader2 className="w-12 h-12 text-[#00d1ff] animate-spin mb-4" />
+        <h2 className="text-xl font-black uppercase tracking-[0.2em] animate-pulse">Sincronizando...</h2>
+      </div>
+    );
+  }
 
   return (
     <motion.div animate={shaking ? { x: [0, -8, 8, -6, 6, -3, 3, 0], y: [0, 4, -4, 3, -3, 1, -1, 0] } : {}} transition={{ duration: 1 }} className="flex-1 flex flex-col max-w-7xl w-full mx-auto relative overflow-hidden">

@@ -78,8 +78,27 @@ export function ChallengeNotification() {
       }
 
       if (battleId) {
-        // 3. Redirección Forzada Inmediata (bypass React Router)
-        window.location.assign('/battle/' + battleId);
+        // 3. Enviar Broadcast (CHALLENGE_ACCEPTED) al retador para redirección inmediata
+        const syncChannel = supabase.channel("global-sync");
+        syncChannel.subscribe(async (status:any) => {
+          if (status === 'SUBSCRIBED') {
+            await syncChannel.send({
+              type: "broadcast",
+              event: "CHALLENGE_ACCEPTED",
+              payload: {
+                challenger_id: challenge.challenger_id,
+                battle_id: battleId
+              }
+            });
+            // Redirección Forzada Inmediata (bypass React Router)
+            window.location.assign('/battle/' + battleId);
+          }
+        });
+
+        // Timeout de seguridad en caso de que la suscripción tarde
+        setTimeout(() => {
+          window.location.assign('/battle/' + battleId);
+        }, 1500);
       } else {
         throw new Error("Batalla no generada.");
       }
