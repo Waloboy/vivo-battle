@@ -142,7 +142,9 @@ export default function ExploreDashboard() {
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { 
+      channel.unsubscribe().then(() => supabase.removeChannel(channel)); 
+    };
   }, [supabase, wakeCount]);
 
   // ── Initialize user & follows ──
@@ -352,7 +354,15 @@ export default function ExploreDashboard() {
     const challengeId = crypto.randomUUID();
 
     // 1. Enviar Broadcast vía global-sync (Instantáneo, bypass de DB)
-    const channel = supabase.channel("global-sync");
+    let channel = supabase.getChannels().find((c: any) => c.topic === "realtime:global-sync");
+    let needsUnsubscribe = false;
+    
+    if (!channel) {
+      channel = supabase.channel("global-sync");
+      channel.subscribe();
+      needsUnsubscribe = true;
+    }
+    
     await channel.send({
       type: "broadcast",
       event: "challenge",
@@ -364,6 +374,10 @@ export default function ExploreDashboard() {
         timestamp: Date.now()
       }
     });
+    
+    if (needsUnsubscribe) {
+      channel.unsubscribe().then(() => supabase.removeChannel(channel!));
+    }
 
     // 2. Guardar en DB para persistencia
     await supabase.from("challenges").insert({ 

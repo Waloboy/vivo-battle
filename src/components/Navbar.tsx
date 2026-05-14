@@ -10,9 +10,14 @@ import { useAuth } from "@/components/AuthProvider";
 export function Navbar() {
   const { user, isAdmin, loading } = useAuth();
   const [unreadMessages, setUnreadMessages] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -41,7 +46,7 @@ export function Navbar() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      channel.unsubscribe().then(() => supabase.removeChannel(channel));
     };
   }, [user, supabase]);
 
@@ -51,6 +56,7 @@ export function Navbar() {
   };
 
   // Don't show navbar on the login page if not logged in
+  if (!mounted) return null;
   if (pathname === "/" && !user) return null;
 
   return (

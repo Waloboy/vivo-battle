@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
-import { SafeHydrate } from "@/components/SafeHydrate";
 
 const BattleClient = dynamic(() => import("./BattleClient"), { 
   ssr: false,
@@ -21,8 +20,6 @@ const Fallback = () => (
 
 export default function BattlePage({ params }: { params: Promise<{ id: string }> }) {
   return (
-    <SafeHydrate fallback={<Fallback />}>
-      <BattleClient params={params} />
-    </SafeHydrate>
+    <BattleClient params={params} />
   );
 }

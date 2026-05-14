@@ -69,7 +69,7 @@ export function ChallengeNotification() {
         .subscribe();
 
       return () => {
-        supabase.removeChannel(channel);
+        channel.unsubscribe().then(() => supabase.removeChannel(channel));
       };
     };
 
@@ -105,11 +105,22 @@ export function ChallengeNotification() {
     }
 
     // ⚡ Broadcast acceptance FIRST — fastest path for challenger
-    supabase.channel("global-sync").send({
+    let channel = supabase.getChannels().find((c: any) => c.topic === "realtime:global-sync");
+    let needsUnsubscribe = false;
+    if (!channel) {
+      channel = supabase.channel("global-sync");
+      channel.subscribe();
+      needsUnsubscribe = true;
+    }
+    channel.send({
       type: "broadcast",
       event: "CHALLENGE_ACCEPTED",
       payload: { battle_id: battle.id, challenger_id: challenge.challenger_id, challenged_id: user.id },
     }).catch(() => {});
+    
+    if (needsUnsubscribe) {
+      channel.unsubscribe().then(() => supabase.removeChannel(channel!));
+    }
 
     // Hard navigate — bypasses React hydration delays
     setChallenge(null);

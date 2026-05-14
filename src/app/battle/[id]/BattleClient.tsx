@@ -501,13 +501,16 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
          if (typeof payload.new.score_b === 'number') setRawB(payload.new.score_b);
          // ⭐ If marked inactive by server, mark as finished
          if (payload.new.is_active === false) setIsFinishedLocally(true);
-      })
-      .subscribe();
+      });
+      
+    ch.subscribe();
       
     return () => { 
       isMounted = false;
       if (currentController) currentController.abort();
-      supabase.removeChannel(ch); 
+      ch.unsubscribe().then(() => {
+        supabase.removeChannel(ch); 
+      });
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [id, supabase, wakeCount]);
@@ -548,14 +551,17 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const dbSyncCounter = useRef(0);
   useEffect(() => {
     const syncInterval = setInterval(() => {
-      const ch = supabase.channel(`battle-${id}`);
-      if (pendingScoreA.current > 0) {
-        ch.send({ type: "broadcast", event: "score", payload: { side: "A", amount: pendingScoreA.current } });
-        pendingScoreA.current = 0;
-      }
-      if (pendingScoreB.current > 0) {
-        ch.send({ type: "broadcast", event: "score", payload: { side: "B", amount: pendingScoreB.current } });
-        pendingScoreB.current = 0;
+      // Find the existing channel instead of creating a new one
+      const existingChannel = supabase.getChannels().find((c: any) => c.topic === `realtime:battle-${id}`);
+      if (existingChannel) {
+        if (pendingScoreA.current > 0) {
+          existingChannel.send({ type: "broadcast", event: "score", payload: { side: "A", amount: pendingScoreA.current } });
+          pendingScoreA.current = 0;
+        }
+        if (pendingScoreB.current > 0) {
+          existingChannel.send({ type: "broadcast", event: "score", payload: { side: "B", amount: pendingScoreB.current } });
+          pendingScoreB.current = 0;
+        }
       }
       // Persist to DB every 2 seconds (4 * 500ms ticks)
       dbSyncCounter.current += 1;
@@ -602,7 +608,11 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
        setHasBroadcastedStart(true);
        const newStart = new Date().toISOString();
        supabase.from('battles').update({ started_at: newStart }).eq('id', id).then();
-       supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "battle_start", payload: { started_at: newStart } });
+       
+       const existingChannel = supabase.getChannels().find((c: any) => c.topic === `realtime:battle-${id}`);
+       if (existingChannel) {
+         existingChannel.send({ type: "broadcast", event: "battle_start", payload: { started_at: newStart } });
+       }
     }
   }, [bothConnected, mySide, hasBroadcastedStart, id, battleData]);
 
@@ -731,7 +741,10 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       (async () => {
         const newStart = new Date().toISOString();
         await supabase.from("battles").update({ score_a: 0, score_b: 0, started_at: newStart }).eq("id", id);
-        await supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "rematch_accepted", payload: { started_at: newStart } });
+        const existingChannel = supabase.getChannels().find((c: any) => c.topic === `realtime:battle-${id}`);
+        if (existingChannel) {
+          existingChannel.send({ type: "broadcast", event: "rematch_accepted", payload: { started_at: newStart } });
+        }
       })();
     }
   }, [rematchA, rematchB, mySide, id, supabase]);
@@ -799,6 +812,20 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     }
   };
 
+  const sendBattleBroadcast = async (event: string, payload: any) => {
+    let ch = supabase.getChannels().find((c: any) => c.topic === `realtime:battle-${id}`);
+    let temp = false;
+    if (!ch) {
+      ch = supabase.channel(`battle-${id}`);
+      ch.subscribe();
+      temp = true;
+    }
+    await ch.send({ type: "broadcast", event, payload }).catch(() => {});
+    if (temp) {
+      ch.unsubscribe().then(() => supabase.removeChannel(ch!));
+    }
+  };
+
   const sendGift = async (side: "A" | "B", giftKey: GiftKey) => {
     if (!profile || !user || isSending || phase !== "BATTLE") return;
     const gift = GIFT_CATALOG.find(g => g.key === giftKey)!;
@@ -837,7 +864,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       else { setRawB(p => p + gift.cost); pendingScoreB.current += gift.cost; }
       
       const msg = { id: Date.now(), username: profile.username, text: `sent ${gift.label} (${fmtWCR(gift.cost)})`, isGift: true, color: gift.color, tier: gift.tier };
-      await supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "chat", payload: msg });
+      await sendBattleBroadcast("chat", msg);
       setMessages(p => [...p, msg]);
       await new Promise(r => setTimeout(r, 600));
     } catch (error: any) { console.error("Gift error:", error); alert("Error: " + (error.message || "Unknown")); } finally { setIsSending(false); }
@@ -846,7 +873,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const sendMsg = async () => {
     if (!newMessage.trim() || !profile) return;
     const msg = { id: Date.now(), username: profile.username, text: newMessage, isGift: false };
-    await supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "chat", payload: msg });
+    await sendBattleBroadcast("chat", msg);
     setMessages(p => [...p, msg]);
     setNewMessage("");
   };
@@ -855,12 +882,12 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     if (mySide === "Audience") return;
     if (mySide === "A") setRematchA(true);
     if (mySide === "B") setRematchB(true);
-    await supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "rematch_request", payload: { side: mySide } });
+    await sendBattleBroadcast("rematch_request", { side: mySide });
   };
 
   const handleExitBattle = () => {
     // Fire-and-forget: broadcast exit + deactivate battle
-    supabase.channel(`battle-${id}`).send({ type: "broadcast", event: "battle_exit", payload: { side: mySide } }).catch(() => {});
+    sendBattleBroadcast("battle_exit", { side: mySide });
     supabase.from("battles").update({ is_active: false }).eq("id", id).then(() => {});
     // Navigate LAST via hard redirect — bypasses React hydration delays
     window.location.href = "/dashboard";

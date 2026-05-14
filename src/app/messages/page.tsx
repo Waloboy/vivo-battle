@@ -221,7 +221,9 @@ export default function MessagesPage() {
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { 
+      channel.unsubscribe().then(() => supabase.removeChannel(channel)); 
+    };
   }, [user, activeChat, supabase]);
 
   // ── Send message ──
