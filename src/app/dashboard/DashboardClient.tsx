@@ -103,8 +103,10 @@ export default function ExploreDashboard() {
 
   // ── Realtime subscription for live updates (PRIORITY) ──
   useEffect(() => {
+    if (!user || !user.id) return; // Wait for user to be available
+
     const channel = supabase
-      .channel("dashboard-realtime")
+      .channel("global-sync")
       // Listen for score updates and status changes
       .on(
         "postgres_changes",
@@ -140,12 +142,22 @@ export default function ExploreDashboard() {
           }
         }
       )
+      // Listen for challenge acceptance directly via broadcast
+      .on(
+        "broadcast",
+        { event: "CHALLENGE_ACCEPTED" },
+        (payload: any) => {
+          if (payload.payload.challenger_id === user.id) {
+            window.location.href = `/battle/${payload.payload.battle_id}`;
+          }
+        }
+      )
       .subscribe();
 
     return () => { 
       channel.unsubscribe().then(() => supabase.removeChannel(channel)); 
     };
-  }, [supabase, wakeCount]);
+  }, [supabase, wakeCount, user]);
 
   // ── Initialize user & follows ──
   useEffect(() => {
@@ -360,7 +372,7 @@ export default function ExploreDashboard() {
     if (!channel) {
       channel = supabase.channel("global-sync");
       channel.subscribe();
-      needsUnsubscribe = true;
+      needsUnsubscribe = true; // Wait, actually if DashboardClient is mounted, it SHOULD be subscribed already to global-sync.
     }
     
     await channel.send({
@@ -376,7 +388,9 @@ export default function ExploreDashboard() {
     });
     
     if (needsUnsubscribe) {
-      channel.unsubscribe().then(() => supabase.removeChannel(channel!));
+      setTimeout(() => {
+        channel.unsubscribe().then(() => supabase.removeChannel(channel!));
+      }, 1000); // Let it finish sending before killing
     }
 
     // 2. Guardar en DB para persistencia

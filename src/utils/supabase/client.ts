@@ -4,6 +4,15 @@ import { createBrowserClient } from '@supabase/ssr'
 let client: ReturnType<typeof createBrowserClient> | null = null;
 
 export function createClient() {
+  // If we are on the server (e.g. Next.js SSR), do NOT use the singleton to avoid session bleed
+  if (typeof window === 'undefined') {
+    return createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  }
+
+  // Singleton for client-side
   if (!client) {
     client = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,14 +22,13 @@ export function createClient() {
           persistSession: true,
           autoRefreshToken: true,
           detectSessionInUrl: true,
-          storage: typeof window !== 'undefined' ? window.localStorage : undefined
         },
         realtime: {
           params: {
             eventsPerSecond: 10,
           },
           // Keep native WebSocket transport to prevent REST fallback
-          transport: typeof window !== 'undefined' ? WebSocket : undefined,
+          transport: window.WebSocket,
         },
       }
     );

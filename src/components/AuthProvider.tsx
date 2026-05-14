@@ -91,6 +91,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionStorage.removeItem("vivo_user_data");
         sessionStorage.removeItem("vivo_user_profile");
         sessionStorage.removeItem("vivo_is_admin");
+
+        // Force delete supabase token
+        if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+          const host = process.env.NEXT_PUBLIC_SUPABASE_URL.split("//")[1]?.split(".")[0];
+          if (host) {
+             localStorage.removeItem(`sb-${host}-auth-token`);
+          }
+        }
+        localStorage.removeItem("vivo_access_token");
+        localStorage.removeItem("vivo_refresh_token");
       }
     }
   }, []);
@@ -168,10 +178,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
+    // 3. Aggressive Reconnection Logic for WebSockets
+    const reconnectInterval = setInterval(() => {
+      if (typeof window !== "undefined" && supabase.realtime) {
+        const state = supabase.realtime.connectionState();
+        if (state === 'CLOSED' || state === 'ERROR') {
+          console.log("[Aggressive Reconnect] WebSocket state is", state, "— forcing reconnect...");
+          supabase.realtime.connect();
+        }
+      }
+    }, 5000);
+
     return () => {
       authListener.subscription.unsubscribe();
+      clearInterval(reconnectInterval);
     };
-  }, [refreshAuth, fetchProfile, supabase.auth, safeUpdateAuth, storeTokens]);
+  }, [refreshAuth, fetchProfile, supabase.auth, safeUpdateAuth, storeTokens, supabase.realtime]);
 
   return (
     <AuthContext.Provider value={{ user, profile, isAdmin, loading, refreshAuth }}>
