@@ -8,76 +8,81 @@ import { createClient } from "@/utils/supabase/client";
 export function ChallengeNotification() {
   const supabase = createClient();
   const [challenge, setChallenge] = useState<any>(null);
-  const [mounted, setMounted] = useState(false);
   const channelRef = useRef<any>(null);
 
   useEffect(() => {
-    setMounted(true);
-    let user_id: string;
+    let active = true;
 
-    const init = async () => {
+    const subscribe = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      user_id = user.id;
+      if (!user || !active) return;
 
-      // 🔥 LIMPIEZA PREVIA: Si ya hay un canal, lo matamos antes de empezar
+      // 1. Matamos cualquier conexión previa para evitar el "Loading" infinito
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
       }
 
-      // 🛡️ CANAL AISLADO: Usamos un nombre único con el ID del usuario
+      // 2. Usamos el canal "realtime" por defecto (igual que el chat)
       channelRef.current = supabase
-        .channel(`user-challenges-${user_id}`)
+        .channel('realtime:public:challenges')
         .on(
           "postgres_changes",
-          { event: "INSERT", schema: "public", table: "challenges", filter: `challenged_id=eq.${user_id}` },
-          (payload:any) => {
-            console.log("RETO RECIBIDO:", payload.new);
-            setChallenge(payload.new);
+          { event: "INSERT", schema: "public", table: "challenges", filter: `challenged_id=eq.${user.id}` },
+          (payload: any) => {
+            if (active) setChallenge(payload.new);
           }
         )
-        .on(
-          "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "challenges", filter: `status=eq.accepted` },
-          (payload:any) => {
-            if (payload.new.challenger_id === user_id && payload.new.battle_id) {
-              window.location.href = `/battle/${payload.new.battle_id}`;
-            }
-          }
-        )
-        .subscribe((status:any) => {
-          console.log("ESTADO CONEXIÓN RETOS:", status);
-        });
+        .subscribe();
     };
 
-    init();
+    // 3. RECONEXIÓN AUTOMÁTICA: Si el usuario vuelve de otra app, reconectamos
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        subscribe();
+      }
+    };
+
+    subscribe();
+    document.addEventListener("visibilitychange", handleFocus);
 
     return () => {
+      active = false;
+      document.removeEventListener("visibilitychange", handleFocus);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
       }
     };
   }, []);
 
-  if (!mounted || !challenge) return null;
+  if (!challenge) return null;
 
   return (
     <AnimatePresence>
-      <motion.div className="fixed top-20 left-1/2 -translate-x-1/2 z-[999] w-[90vw] max-w-sm bg-black border-2 border-[#ff007a] rounded-3xl p-6 shadow-2xl">
+      <motion.div 
+        initial={{ y: -50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: -50, opacity: 0 }}
+        className="fixed top-5 left-1/2 -translate-x-1/2 z-[1000] w-[350px] bg-black border-2 border-[#ff007a] rounded-2xl p-5 shadow-[0_0_30px_rgba(255,0,122,0.4)]"
+      >
          <div className="flex items-center gap-4">
-            <Swords className="text-[#ff007a]" />
+            <div className="bg-[#ff007a] p-2 rounded-full">
+              <Swords className="text-white" size={20} />
+            </div>
             <div>
-               <p className="text-white font-bold">¡NUEVO RETO!</p>
-               <p className="text-sm text-gray-400">Te han desafiado a una batalla.</p>
+               <p className="text-white font-black text-sm">¡NUEVO RETO!</p>
+               <p className="text-xs text-gray-400">Alguien quiere batallar contigo.</p>
             </div>
          </div>
          <div className="flex gap-2 mt-4">
-            <button onClick={() => setChallenge(null)} className="flex-1 bg-gray-800 py-2 rounded-xl text-xs">IGNORAR</button>
+            <button onClick={() => setChallenge(null)} className="flex-1 bg-gray-900 text-white py-2 rounded-xl text-[10px] font-bold">IGNORAR</button>
             <button 
-               onClick={() => window.location.href = `/dashboard`} // Forzamos recarga al dashboard para aceptar
-               className="flex-1 bg-[#ff007a] py-2 rounded-xl text-xs font-bold"
+               onClick={() => {
+                 setChallenge(null);
+                 window.location.href = '/dashboard';
+               }}
+               className="flex-1 bg-[#ff007a] text-white py-2 rounded-xl text-[10px] font-black"
             >
-               VER RETO
+               IR ACEPTAR
             </button>
          </div>
       </motion.div>
