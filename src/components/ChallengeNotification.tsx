@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Swords, X, Wifi, WifiOff } from "lucide-react";
+import { Swords, X } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
 interface IncomingChallenge {
@@ -33,53 +33,57 @@ export function ChallengeNotification() {
       if (!user || !isSubscribed) return;
       userIdRef.current = user.id;
 
+      // ⚡️ SUSCRIPCIÓN MAESTRA: Escucha la tabla de la base de datos directamente
       const channel = supabase
-        .channel("global-sync", {
-          config: { broadcast: { self: false } },
-        })
+        .channel("global-sync")
         .on(
-          "broadcast",
-          { event: "challenge" },
-          (payload: any) => {
-            if (!isSubscribed || !userIdRef.current) return;
-            const p = payload.payload;
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "challenges",
+            filter: `challenged_id=eq.${user.id}`, // Solo escucha retos para MÍ
+          },
+          (payload:any) => {
+            if (!isSubscribed) return;
+            const newChallenge = payload.new;
             
-            if (p.challenged_id === userIdRef.current) {
-              setChallenge({
-                id: p.id,
-                challenger_id: p.challenger_id,
-                challenger_username: p.challenger_username || "Jugador",
-              });
-              setHidden(false);
-            }
+            setChallenge({
+              id: newChallenge.id,
+              challenger_id: newChallenge.challenger_id,
+              challenger_username: newChallenge.challenger_username || "Jugador",
+            });
+            setHidden(false);
           }
         )
         .on(
-          "broadcast",
-          { event: "CHALLENGE_ACCEPTED" },
-          (payload: any) => {
-            if (!isSubscribed || !userIdRef.current) return;
-            const p = payload.payload;
-            if (p.challenger_id === userIdRef.current || p.challenged_id === userIdRef.current) {
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "challenges",
+            filter: `status=eq.accepted`,
+          },
+          (payload:any) => {
+            const updated = payload.new;
+            // Si yo soy el retador y aceptaron mi reto, me voy a la batalla
+            if (updated.challenger_id === userIdRef.current && updated.battle_id) {
               setHidden(true);
-              window.location.href = `/battle/${p.battle_id}`;
+              window.location.href = `/battle/${updated.battle_id}`;
             }
           }
         )
         .subscribe();
 
       return () => {
-        channel.unsubscribe().then(() => supabase.removeChannel(channel));
+        supabase.removeChannel(channel);
       };
     };
 
-    const cleanup = setupRealtime();
+    setupRealtime();
 
     return () => {
       isSubscribed = false;
-      cleanup.then(cleanupFn => {
-        if (cleanupFn) cleanupFn();
-      });
     };
   }, [mounted, supabase]);
 
@@ -88,57 +92,43 @@ export function ChallengeNotification() {
     setResponding(true);
     setHidden(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setHidden(false); setResponding(false); return; }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user found");
 
-    const { data: battle, error: battleError } = await supabase
-      .from("battles")
-      .insert({ player_a_id: challenge.challenger_id, player_b_id: user.id, is_active: true })
-      .select("id")
-      .single();
+      // 1. Crear la batalla
+      const { data: battle, error: battleError } = await supabase
+        .from("battles")
+        .insert({ 
+          player_a_id: challenge.challenger_id, 
+          player_b_id: user.id, 
+          is_active: true 
+        })
+        .select("id")
+        .single();
 
-    if (battleError || !battle) {
-      console.error("Error creating battle:", battleError);
+      if (battleError || !battle) throw battleError;
+
+      // 2. Actualizar el reto (Esto disparará el Realtime para el oponente)
+      await supabase
+        .from("challenges")
+        .update({
+          status: "accepted",
+          battle_id: battle.id,
+          resolved_at: new Date().toISOString(),
+        })
+        .eq("id", challenge.id);
+
+      // 3. Ir a la batalla
+      setChallenge(null);
+      setResponding(false);
+      window.location.href = `/battle/${battle.id}`;
+
+    } catch (error) {
+      console.error("Error al aceptar:", error);
       setResponding(false);
       setHidden(false);
-      return;
     }
-
-    // ⚡ Broadcast acceptance FIRST — fastest path for challenger
-    let channel = supabase.getChannels().find((c: any) => c.topic === "realtime:global-sync");
-    let needsUnsubscribe = false;
-    if (!channel) {
-      channel = supabase.channel("global-sync");
-      channel.subscribe();
-      needsUnsubscribe = true;
-    }
-    channel.send({
-      type: "broadcast",
-      event: "CHALLENGE_ACCEPTED",
-      payload: { battle_id: battle.id, challenger_id: challenge.challenger_id, challenged_id: user.id },
-    }).catch(() => {});
-    
-    if (needsUnsubscribe) {
-      channel.unsubscribe().then(() => supabase.removeChannel(channel!));
-    }
-
-    // Hard navigate — bypasses React hydration delays
-    setChallenge(null);
-    setResponding(false);
-    window.location.href = `/battle/${battle.id}`;
-
-    // Fire-and-forget: update challenge status in DB
-    supabase
-      .from("challenges")
-      .update({
-        status: "accepted",
-        battle_id: battle.id,
-        resolved_at: new Date().toISOString(),
-        challenger_id: challenge.challenger_id,
-        challenged_id: user.id,
-      })
-      .eq("id", challenge.id)
-      .then(() => {});
   };
 
   const handleDecline = async () => {
@@ -166,13 +156,11 @@ export function ChallengeNotification() {
           className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] w-[90vw] max-w-sm"
         >
           <div className="relative overflow-hidden rounded-3xl border-2 border-[#ff007a]/50 bg-black/90 backdrop-blur-xl shadow-[0_0_60px_rgba(255,0,122,0.3)]">
-            {/* Animated glow border */}
             <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
               <div className="absolute -inset-1 bg-gradient-to-r from-[#ff007a] via-[#00d1ff] to-[#ff007a] opacity-20 blur-sm animate-pulse" />
             </div>
 
             <div className="relative p-6 space-y-4">
-              {/* Header */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#ff007a] to-[#00d1ff] flex items-center justify-center">
@@ -192,7 +180,6 @@ export function ChallengeNotification() {
 
               <p className="text-white/40 text-xs text-center">¿Aceptas el reto de batalla 1vs1?</p>
 
-              {/* Actions */}
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={handleDecline} disabled={responding}
                   className="py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all disabled:opacity-30">
