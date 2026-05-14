@@ -83,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── fetchProfile: strict — only real DB data ────────────────────────────
   const fetchProfile = useCallback(async (userId: string, currentUser: any): Promise<boolean> => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => { controller.abort(); setLoading(false); }, 2500);
+    const timeoutId = setTimeout(() => { controller.abort(); setLoading(false); }, 5000);
     try {
       const { data, error } = await supabase
         .from("profiles")
