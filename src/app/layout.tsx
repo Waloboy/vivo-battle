@@ -26,7 +26,50 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark" suppressHydrationWarning>
       <head>
-        <link rel="manifest" href="/manifest.json" />
+        <link rel="manifest" href="/manifest.json" crossOrigin="use-credentials" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+// ── ARENA 58: Service Worker Registration & Cache Busting ──
+(function() {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+  
+  var SW_PATH = '/sw-auth.js?v=${Date.now()}';
+  
+  navigator.serviceWorker.register(SW_PATH, { scope: '/' })
+    .then(function(reg) {
+      // Force update check on every page load
+      reg.update();
+      
+      // Detect when a new SW is waiting and activate it
+      reg.addEventListener('updatefound', function() {
+        var newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', function() {
+          if (newWorker.state === 'activated') {
+            // New version active — purge old caches
+            if (navigator.serviceWorker.controller) {
+              navigator.serviceWorker.controller.postMessage({ type: 'PURGE_CACHE' });
+            }
+          }
+        });
+      });
+    })
+    .catch(function(err) {
+      console.warn('[SW] Registration failed:', err);
+    });
+
+  // Listen for keepalive pings from the SW
+  navigator.serviceWorker.addEventListener('message', function(event) {
+    if (event.data && event.data.type === 'SESSION_KEEPALIVE') {
+      // Trigger a lightweight auth check to keep the token alive
+      window.dispatchEvent(new Event('vivo_wakeup'));
+    }
+  });
+})();
+`,
+          }}
+        />
       </head>
       <body 
         suppressHydrationWarning 
