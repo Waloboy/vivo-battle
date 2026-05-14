@@ -64,7 +64,7 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
         <Link href={user ? "/dashboard" : "/"} className="flex items-center gap-2 group">
           <div className="p-2 rounded-lg bg-gradient-to-br from-[#ff007a] to-[#00d1ff] opacity-80 group-hover:opacity-100 transition-opacity">
-            <img src="/assets/images/logo-192.png" alt="ARENA 58 Logo" className="w-5 h-5 object-contain" />
+            <img src="/assets/images/logo-192.png" alt="ARENA 58 Logo" className="w-8 h-8 object-contain" />
           </div>
           <span className="font-black text-xl tracking-tight text-gradient hidden sm:flex items-center gap-2">
             ARENA 58

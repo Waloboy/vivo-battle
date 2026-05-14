@@ -365,14 +365,14 @@ export default function ExploreDashboard() {
     // Generar un ID predecible o único para el broadcast
     const challengeId = crypto.randomUUID();
 
-    // 1. Enviar Broadcast vía global-sync (Instantáneo, bypass de DB)
-    let channel = supabase.getChannels().find((c: any) => c.topic === "realtime:global-sync");
+    // 1. Enviar Broadcast vía challenge-notif (Instantáneo, bypass de DB)
+    let channel = supabase.getChannels().find((c: any) => c.topic === "realtime:challenge-notif");
     let needsUnsubscribe = false;
     
     if (!channel) {
-      channel = supabase.channel("global-sync");
+      channel = supabase.channel("challenge-notif");
       channel.subscribe();
-      needsUnsubscribe = true; // Wait, actually if DashboardClient is mounted, it SHOULD be subscribed already to global-sync.
+      needsUnsubscribe = true; 
     }
     
     await channel.send({

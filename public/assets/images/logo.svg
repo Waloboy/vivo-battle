@@ -4,23 +4,31 @@
       <stop offset="0%" stop-color="#0a0a0a" />
       <stop offset="100%" stop-color="#1a1a2e" />
     </linearGradient>
-    <linearGradient id="brand" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#ff007a" />
-      <stop offset="100%" stop-color="#00d1ff" />
+    <linearGradient id="brand" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00d1ff" />
+      <stop offset="50%" stop-color="#7a00ff" />
+      <stop offset="100%" stop-color="#ff007a" />
     </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
-  <!-- Background -->
-  <rect width="512" height="512" rx="100" fill="url(#bg)" />
-  
-  <!-- Outer glowing ring -->
-  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#brand)" stroke-width="12" opacity="0.3" />
-  <circle cx="256" cy="256" r="160" fill="none" stroke="url(#brand)" stroke-width="6" opacity="0.6" />
 
-  <!-- A-58 Symbol -->
-  <g transform="translate(140, 160)">
-    <!-- stylized A -->
-    <path d="M116 0 L30 190 L70 190 L92 140 L140 140 L162 190 L202 190 Z M105 105 L127 105 L116 80 Z" fill="url(#brand)" />
-    <!-- 58 -->
-    <text x="116" y="270" font-family="Arial, sans-serif" font-weight="900" font-size="72" fill="#ffffff" text-anchor="middle" letter-spacing="4">58</text>
-  </g>
+  <!-- Background -->
+  <rect width="512" height="512" fill="url(#bg)" rx="112" />
+
+  <!-- Outer Ring -->
+  <circle cx="256" cy="256" r="188" fill="none" stroke="url(#brand)" stroke-width="24" filter="url(#glow)" />
+  
+  <!-- Massive Inner A touching the ring -->
+  <!-- Outer path: M 256 68 (top) L 115 380 (bottom left) L 175 380 (inner leg left) L 202 320 (crossbar left) L 310 320 (crossbar right) L 337 380 (inner leg right) L 397 380 (bottom right) -->
+  <!-- Cutout path: M 256 201 L 229 260 L 283 260 Z -->
+  <path d="M 256 68 L 115 380 L 175 380 L 202 320 L 310 320 L 337 380 L 397 380 Z M 256 201 L 229 260 L 283 260 Z" fill="url(#brand)" filter="url(#glow)" />
+
+  <!-- The "58" watermark inside the A -->
+  <text x="256" y="340" font-family="'Orbitron', 'Inter', sans-serif" font-size="130" font-weight="900" fill="#ffffff" opacity="0.3" text-anchor="middle" letter-spacing="-4">58</text>
 </svg>

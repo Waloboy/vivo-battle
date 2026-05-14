@@ -63,8 +63,8 @@ export default function AuthClient() {
         className="w-full max-w-md z-10"
       >
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center p-4 rounded-2xl bg-gradient-to-br from-[#ff007a] to-[#00d1ff] mb-4 opacity-90">
-            <img src="/assets/images/logo-192.png" alt="ARENA 58 Logo" className="w-12 h-12 object-contain" />
+          <div className="inline-flex items-center justify-center p-5 rounded-2xl bg-gradient-to-br from-[#ff007a] to-[#00d1ff] mb-4 opacity-90 shadow-[0_0_30px_rgba(255,0,122,0.3)]">
+            <img src="/assets/images/logo-192.png" alt="ARENA 58 Logo" className="w-20 h-20 object-contain" />
           </div>
           <h1 className="text-4xl font-black tracking-tighter text-gradient">ARENA 58</h1>
           <p className="text-white/60 mt-2">La app de batallas 1vs1</p>

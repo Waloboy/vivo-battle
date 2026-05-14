@@ -29,81 +29,56 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => createClient(), []);
 
-  // Use sessionStorage and localStorage as absolute truth initially
-  const [user, setUser] = useState<any>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const sessionStored = sessionStorage.getItem("vivo_user_data");
-        if (sessionStored) return JSON.parse(sessionStored);
-        const stored = localStorage.getItem("vivo_user_data");
-        return stored ? JSON.parse(stored) : null;
-      } catch {}
-    }
-    return null;
-  });
-
-  const [profile, setProfile] = useState<any>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const sessionStored = sessionStorage.getItem("vivo_user_profile");
-        if (sessionStored) return JSON.parse(sessionStored);
-        const stored = localStorage.getItem("vivo_user_profile");
-        return stored ? JSON.parse(stored) : null;
-      } catch {}
-    }
-    return null;
-  });
-
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      const sessionStored = sessionStorage.getItem("vivo_is_admin");
-      if (sessionStored !== null) return sessionStored === "true";
-      return localStorage.getItem("vivo_is_admin") === "true";
-    }
-    return false;
-  });
-
-  const [loading, setLoading] = useState(false);
+  // ── HYDRATION-SAFE: Always start with null/true ──
+  // NEVER read from localStorage in useState initializer — that causes #418
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
 
   const didInit = useRef(false);
+  const isRefreshing = useRef(false);
 
-  // Wrapper for state updates
-  const safeUpdateAuth = useCallback((newUser: any, newProfile: any, newIsAdmin: boolean) => {
+  // ── Persist auth state to storage ──
+  const persistAuth = useCallback((newUser: any, newProfile: any, newIsAdmin: boolean) => {
+    if (typeof window === "undefined") return;
 
-    setUser(newUser);
-    setProfile(newProfile);
-    setIsAdmin(newIsAdmin);
+    if (newUser && newProfile) {
+      const userData = JSON.stringify(newUser);
+      const profileData = JSON.stringify(newProfile);
+      const adminStr = String(newIsAdmin);
 
-    if (typeof window !== "undefined") {
-      if (newUser && newProfile) {
-        // Save to localStorage
-        localStorage.setItem("vivo_user_data", JSON.stringify(newUser));
-        localStorage.setItem("vivo_user_profile", JSON.stringify(newProfile));
-        localStorage.setItem("vivo_is_admin", String(newIsAdmin));
-        // Save to sessionStorage (Emergency Reserve)
-        sessionStorage.setItem("vivo_user_data", JSON.stringify(newUser));
-        sessionStorage.setItem("vivo_user_profile", JSON.stringify(newProfile));
-        sessionStorage.setItem("vivo_is_admin", String(newIsAdmin));
-      } else {
-        localStorage.removeItem("vivo_user_data");
-        localStorage.removeItem("vivo_user_profile");
-        localStorage.removeItem("vivo_is_admin");
-        sessionStorage.removeItem("vivo_user_data");
-        sessionStorage.removeItem("vivo_user_profile");
-        sessionStorage.removeItem("vivo_is_admin");
+      localStorage.setItem("vivo_user_data", userData);
+      localStorage.setItem("vivo_user_profile", profileData);
+      localStorage.setItem("vivo_is_admin", adminStr);
+      sessionStorage.setItem("vivo_user_data", userData);
+      sessionStorage.setItem("vivo_user_profile", profileData);
+      sessionStorage.setItem("vivo_is_admin", adminStr);
+    } else {
+      localStorage.removeItem("vivo_user_data");
+      localStorage.removeItem("vivo_user_profile");
+      localStorage.removeItem("vivo_is_admin");
+      sessionStorage.removeItem("vivo_user_data");
+      sessionStorage.removeItem("vivo_user_profile");
+      sessionStorage.removeItem("vivo_is_admin");
 
-        // Force delete supabase token
-        if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
-          const host = process.env.NEXT_PUBLIC_SUPABASE_URL.split("//")[1]?.split(".")[0];
-          if (host) {
-             localStorage.removeItem(`sb-${host}-auth-token`);
-          }
+      // Force delete supabase token
+      if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+        const host = process.env.NEXT_PUBLIC_SUPABASE_URL.split("//")[1]?.split(".")[0];
+        if (host) {
+          localStorage.removeItem(`sb-${host}-auth-token`);
         }
-        localStorage.removeItem("vivo_access_token");
-        localStorage.removeItem("vivo_refresh_token");
       }
     }
   }, []);
+
+  // Wrapper for state updates + persist
+  const safeUpdateAuth = useCallback((newUser: any, newProfile: any, newIsAdmin: boolean) => {
+    setUser(newUser);
+    setProfile(newProfile);
+    setIsAdmin(newIsAdmin);
+    persistAuth(newUser, newProfile, newIsAdmin);
+  }, [persistAuth]);
 
   // ── fetchProfile: strict — only real DB data ────────────────────────────
   const fetchProfile = useCallback(async (userId: string, currentUser: any): Promise<boolean> => {
@@ -127,50 +102,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase, safeUpdateAuth]);
 
-  // Save tokens manually
-  const storeTokens = useCallback(async () => {
-    try {
-      const { data } = await supabase.auth.getSession();
-      if (data?.session && typeof window !== "undefined") {
-        localStorage.setItem("vivo_access_token", data.session.access_token);
-        localStorage.setItem("vivo_refresh_token", data.session.refresh_token);
-      }
-    } catch {}
-  }, [supabase]);
-
-  // ── refreshAuth: main entry point ───────────────────────────────────────
+  // ── refreshAuth: validate session with Supabase ─────────────────────────
   const refreshAuth = useCallback(async () => {
+    if (isRefreshing.current) return;
+    isRefreshing.current = true;
+
     try {
       if (!supabase || !supabase.auth) return;
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
+      const { data: { session } } = await supabase.auth.getSession();
+
       if (session?.user) {
         await fetchProfile(session.user.id, session.user);
-        storeTokens();
       } else {
+        // Only wipe state if we're sure there's no session (not a network error)
         safeUpdateAuth(null, null, false);
       }
     } catch (e) {
-      console.warn("[Auth] error refreshing session:", e);
+      // Network error — DON'T wipe state, keep cached data visible
+      console.warn("[Auth] refreshAuth network error (keeping cached state):", e);
     } finally {
+      isRefreshing.current = false;
       setLoading(false);
     }
-  }, [supabase, fetchProfile, safeUpdateAuth, storeTokens]);
+  }, [supabase, fetchProfile, safeUpdateAuth]);
 
   // ── Init + listeners ────────────────────────────────────────────────────
   useEffect(() => {
     if (didInit.current) return;
     didInit.current = true;
 
-    // 1. Initial auth
+    // Step 1: INSTANT hydration from storage (prevents loading flash)
+    // This runs in useEffect (after mount) so it's hydration-safe — no #418
+    if (typeof window !== "undefined") {
+      try {
+        const storedUser = sessionStorage.getItem("vivo_user_data")
+          || localStorage.getItem("vivo_user_data");
+        const storedProfile = sessionStorage.getItem("vivo_user_profile")
+          || localStorage.getItem("vivo_user_profile");
+        const storedAdmin = sessionStorage.getItem("vivo_is_admin")
+          || localStorage.getItem("vivo_is_admin");
+
+        if (storedUser && storedProfile) {
+          setUser(JSON.parse(storedUser));
+          setProfile(JSON.parse(storedProfile));
+          setIsAdmin(storedAdmin === "true");
+          setLoading(false); // We have cached data — show it immediately
+        }
+      } catch { /* corrupt storage, fall through to refreshAuth */ }
+    }
+
+    // Step 2: Validate session with Supabase (background, won't wipe on error)
     refreshAuth();
 
-    // 2. Auth state change listener
+    // Step 3: Auth state change listener
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event: any, session: any) => {
         if (session?.user) {
           await fetchProfile(session.user.id, session.user);
-          storeTokens();
         } else {
           safeUpdateAuth(null, null, false);
         }
@@ -178,22 +166,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // 3. Aggressive Reconnection Logic for WebSockets
-    const reconnectInterval = setInterval(() => {
-      if (typeof window !== "undefined" && supabase.realtime) {
-        const state = supabase.realtime.connectionState();
-        if (state === 'CLOSED' || state === 'ERROR') {
-          console.log("[Aggressive Reconnect] WebSocket state is", state, "— forcing reconnect...");
-          supabase.realtime.connect();
+    // Step 4: CENTRALIZED Visibility Change Handler
+    // This is THE fix for zombie state — one handler for the entire app
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+
+      console.log("[Auth] Tab became visible — refreshing session & WebSocket");
+
+      // Re-validate session (won't wipe state on network error)
+      refreshAuth();
+
+      // Reconnect WebSocket if it died while tab was hidden
+      if (supabase.realtime) {
+        try {
+          const state = supabase.realtime.connectionState();
+          if (state !== "open" && state !== "connecting") {
+            console.log("[Auth] WebSocket was", state, "— reconnecting...");
+            supabase.realtime.connect();
+          }
+        } catch (e) {
+          console.warn("[Auth] realtime state check failed:", e);
         }
       }
-    }, 5000);
+
+      // Notify ALL child components to re-fetch their data
+      window.dispatchEvent(new Event("vivo_wakeup"));
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       authListener.subscription.unsubscribe();
-      clearInterval(reconnectInterval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [refreshAuth, fetchProfile, supabase.auth, safeUpdateAuth, storeTokens, supabase.realtime]);
+  }, [refreshAuth, fetchProfile, supabase, safeUpdateAuth]);
 
   return (
     <AuthContext.Provider value={{ user, profile, isAdmin, loading, refreshAuth }}>

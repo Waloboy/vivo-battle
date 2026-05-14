@@ -1,58 +1,53 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Swords, X } from "lucide-react";
+import { Swords } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import { useAuth } from "@/components/AuthProvider";
 
 export function ChallengeNotification() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+  const { user } = useAuth();
   const [challenge, setChallenge] = useState<any>(null);
   const channelRef = useRef<any>(null);
 
   useEffect(() => {
-    let active = true;
+    if (!user?.id) return;
 
-    const subscribe = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !active) return;
+    // Clean up previous channel if any
+    if (channelRef.current) {
+      channelRef.current.unsubscribe().then(() => {
+        try { supabase.removeChannel(channelRef.current); } catch {}
+      });
+      channelRef.current = null;
+    }
 
-      // 1. Matamos cualquier conexión previa para evitar el "Loading" infinito
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-      }
-
-      // 2. Usamos el canal "realtime" por defecto (igual que el chat)
-      channelRef.current = supabase
-        .channel('realtime:public:challenges')
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "challenges", filter: `challenged_id=eq.${user.id}` },
-          (payload: any) => {
-            if (active) setChallenge(payload.new);
+    // Subscribe to global-sync for BROADCAST challenge events (instant)
+    // DashboardClient sends challenges via broadcast on this same channel
+    channelRef.current = supabase
+      .channel("challenge-notif")
+      .on(
+        "broadcast",
+        { event: "challenge" },
+        (msg: any) => {
+          const payload = msg.payload;
+          if (payload?.challenged_id === user.id) {
+            setChallenge(payload);
           }
-        )
-        .subscribe();
-    };
-
-    // 3. RECONEXIÓN AUTOMÁTICA: Si el usuario vuelve de otra app, reconectamos
-    const handleFocus = () => {
-      if (document.visibilityState === 'visible') {
-        subscribe();
-      }
-    };
-
-    subscribe();
-    document.addEventListener("visibilitychange", handleFocus);
+        }
+      )
+      .subscribe();
 
     return () => {
-      active = false;
-      document.removeEventListener("visibilitychange", handleFocus);
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
+        channelRef.current.unsubscribe().then(() => {
+          try { supabase.removeChannel(channelRef.current); } catch {}
+        });
+        channelRef.current = null;
       }
     };
-  }, []);
+  }, [user?.id, supabase]);
 
   if (!challenge) return null;
 
@@ -70,7 +65,11 @@ export function ChallengeNotification() {
             </div>
             <div>
                <p className="text-white font-black text-sm">¡NUEVO RETO!</p>
-               <p className="text-xs text-gray-400">Alguien quiere batallar contigo.</p>
+               <p className="text-xs text-gray-400">
+                 {challenge.challenger_username
+                   ? `@${challenge.challenger_username} quiere batallar`
+                   : "Alguien quiere batallar contigo."}
+               </p>
             </div>
          </div>
          <div className="flex gap-2 mt-4">

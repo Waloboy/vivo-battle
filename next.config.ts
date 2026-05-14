@@ -30,13 +30,7 @@ const nextConfig = {
   },
   // Transpilar paquetes de LiveKit para asegurar que eval/wasm funcionen correctamente
   transpilePackages: ['livekit-client', '@livekit/components-react'],
-  experimental: {
-    turbo: {},
-  },
-  webpack: (config: any) => {
-    config.optimization.minimize = false;
-    return config;
-  },
+  turbopack: {},
 };
 
 export default nextConfig;
