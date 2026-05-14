@@ -22,14 +22,9 @@ export function createClient() {
           persistSession: true,
           autoRefreshToken: true,
           detectSessionInUrl: true,
-        },
-        realtime: {
-          params: {
-            eventsPerSecond: 10,
-          },
-          // Keep native WebSocket transport to prevent REST fallback
-          transport: window.WebSocket,
-        },
+        }
+        // Se eliminó la configuración manual de realtime para permitir
+        // que Supabase gestione las reconexiones automáticas al cambiar de app.
       }
     );
   }
