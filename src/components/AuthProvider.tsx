@@ -4,6 +4,7 @@ import {
   createContext, useContext, useEffect,
   useState, useMemo, useCallback, useRef
 } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -27,6 +28,7 @@ export const useAuth = () => useContext(AuthContext);
 
 // ─── Component ──────────────────────────────────────────────────────────────
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
   // ── HYDRATION-SAFE: Always start with null/true ──
@@ -82,12 +84,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── fetchProfile: strict — only real DB data ────────────────────────────
   const fetchProfile = useCallback(async (userId: string, currentUser: any): Promise<boolean> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => { controller.abort(); setLoading(false); }, 2500);
     try {
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", userId)
+        .abortSignal(controller.signal)
         .single();
+      clearTimeout(timeoutId);
 
       if (error || !data) {
         console.warn("[Auth] No profile row for:", userId);
@@ -97,6 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       safeUpdateAuth(currentUser, data, data.role === "admin");
       return true;
     } catch (e) {
+      clearTimeout(timeoutId);
       console.warn("[Auth] fetchProfile error:", e);
       return false;
     }
@@ -170,7 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // This is THE fix for zombie state — one handler for the entire app
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        window.location.reload();
+        router.refresh();
       }
     };
 

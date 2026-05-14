@@ -162,7 +162,7 @@ export default function ExploreDashboard() {
         { event: "CHALLENGE_ACCEPTED" },
         (payload: any) => {
           if (payload.payload.challenger_id === user.id) {
-            window.location.assign('/arena/' + payload.payload.battle_id);
+            window.location.assign(`/arena/${payload.payload.battle_id}?t=${Date.now()}`);
           }
         }
       )
@@ -262,7 +262,7 @@ export default function ExploreDashboard() {
 
     // Use abort signal instead of Promise.race to truly cancel hung requests
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout for fallback
+    const timeoutId = setTimeout(() => { controller.abort(); setLoading(false); }, 2500); // 2.5s timeout for fallback
     
     // add abortSignal to the query execution
     const { data, error } = await query.abortSignal(controller.signal);
@@ -449,7 +449,7 @@ export default function ExploreDashboard() {
       await supabase.from("matchmaking_queue").delete().eq("user_id", user.id);
       await supabase.from("matchmaking_queue").delete().eq("user_id", opponent.user_id);
       setMatchmaking(false);
-      if (battle) window.location.href = `/arena/${battle.id}`;
+      if (battle) window.location.href = `/arena/${battle.id}?t=${Date.now()}`;
     } else {
       // Wait for match via polling (simple approach)
       const interval = setInterval(async () => {
@@ -457,7 +457,7 @@ export default function ExploreDashboard() {
         if (!myEntry) { clearInterval(interval); setMatchmaking(false); return; }
         // Check if someone created a battle with us
         const { data: newBattle } = await supabase.from("battles").select("id").or(`player_a_id.eq.${user.id},player_b_id.eq.${user.id}`).eq("is_active", true).order("started_at", { ascending: false }).limit(1).single();
-        if (newBattle) { clearInterval(interval); await supabase.from("matchmaking_queue").delete().eq("user_id", user.id); setMatchmaking(false); window.location.href = `/arena/${newBattle.id}`; }
+        if (newBattle) { clearInterval(interval); await supabase.from("matchmaking_queue").delete().eq("user_id", user.id); setMatchmaking(false); window.location.href = `/arena/${newBattle.id}?t=${Date.now()}`; }
       }, 3000);
       // Auto-cancel after 30s
       setTimeout(async () => { clearInterval(interval); await supabase.from("matchmaking_queue").delete().eq("user_id", user.id); setMatchmaking(false); }, 30000);

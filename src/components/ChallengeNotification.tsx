@@ -91,13 +91,13 @@ export function ChallengeNotification() {
               }
             });
             // Redirección Forzada Inmediata (bypass React Router)
-            window.location.assign('/arena/' + battleId);
+            window.location.assign(`/arena/${battleId}?t=${Date.now()}`);
           }
         });
 
         // Timeout de seguridad en caso de que la suscripción tarde
         setTimeout(() => {
-          window.location.assign('/arena/' + battleId);
+          window.location.assign(`/arena/${battleId}?t=${Date.now()}`);
         }, 1500);
       } else {
         throw new Error("Batalla no generada.");
