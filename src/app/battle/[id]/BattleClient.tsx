@@ -14,7 +14,7 @@ import { getWalletCredits } from "@/utils/balance";
 import { fmtWCR, fmtBCR } from "@/utils/format";
 
 import { LiveKitRoom, VideoTrack, AudioTrack, useTracks, useLocalParticipant, useParticipants } from '@livekit/components-react';
-import { Track } from 'livekit-client';
+import { Track, RoomEvent } from 'livekit-client';
 import '@livekit/components-styles';
 
 interface FloatTap { id: number; x: number; y: number }
@@ -33,6 +33,17 @@ const fmtTime = (s: number) => {
   if (s < 0) return "0:00";
   return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 };
+
+function isTokenExpired(token: string) {
+  if (!token) return true;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    // Give a 5-minute buffer (300 seconds)
+    return (payload.exp * 1000) < (Date.now() + 300000);
+  } catch (e) {
+    return true;
+  }
+}
 
 // --- LiveKit Video Component ---
 import { useConnectionState, useRoomContext } from '@livekit/components-react';
@@ -63,27 +74,56 @@ function RoomWatcher({ playerA, playerB, onBothConnected, onOpponentGhost }: {
   return null;
 }
 
-function RoomReconnectOnFocus({ onRequestNewToken }: { onRequestNewToken: () => void }) {
+function RoomReconnectOnFocus({ onRequestNewToken, livekitToken }: { onRequestNewToken: () => void, livekitToken: string }) {
   const room = useRoomContext();
   const connectionState = useConnectionState();
 
   useEffect(() => {
+    if (!room) return;
+
     const handleVisibility = () => {
       if (!document.hidden) {
-        // Tab regained focus — check if room is stuck
-        if (room && (room.state === "disconnected" || connectionState === "disconnected")) {
-          console.log("[LiveKit] Room disconnected on focus, requesting new token...");
-          onRequestNewToken();
+        // Tab regained focus
+        if (room.state === "disconnected" || connectionState === "disconnected") {
+          console.log("[LiveKit] Room disconnected on focus.");
+          if (isTokenExpired(livekitToken)) {
+            console.log("[LiveKit] Token expired, requesting new token...");
+            onRequestNewToken();
+          } else {
+            console.log("[LiveKit] Token valid, running prepareConnection()...");
+            room.prepareConnection(process.env.NEXT_PUBLIC_LIVEKIT_URL || "", livekitToken);
+          }
+        }
+        
+        // Recover Tracks (Camera/Mic)
+        if (room.localParticipant) {
+          room.localParticipant.setCameraEnabled(true).catch(console.warn);
+          room.localParticipant.setMicrophoneEnabled(true).catch(console.warn);
         }
       }
     };
+
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("focus", handleVisibility);
+
+    const handleDisconnect = () => {
+      console.log("[LiveKit] RoomEvent.Disconnected triggered.");
+      if (document.hidden) return; // If hidden, wait for visibilitychange
+      
+      if (isTokenExpired(livekitToken)) {
+        onRequestNewToken();
+      } else {
+        room.prepareConnection(process.env.NEXT_PUBLIC_LIVEKIT_URL || "", livekitToken);
+      }
+    };
+    room.on(RoomEvent.Disconnected, handleDisconnect);
+
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("focus", handleVisibility);
+      room.off(RoomEvent.Disconnected, handleDisconnect);
     };
-  }, [room, connectionState, onRequestNewToken]);
+  }, [room, connectionState, onRequestNewToken, livekitToken]);
   return null;
 }
 
@@ -435,32 +475,6 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     };
     initBattleData();
 
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // Stop fetching tokens or trying to reconnect
-      } else {
-        // Tab regained focus — always force a fresh token to avoid stale WS
-        const fetchLkToken = async () => {
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user?.id) {
-              const uname = profile?.username || session.user.id;
-              const res = await fetch(`/api/livekit/token?room=${id}&username=${uname}&t=${Date.now()}`);
-              const data = await res.json();
-              if (data.token) {
-                console.log("[LiveKit] Fresh token obtained on focus");
-                setLivekitToken(data.token);
-              }
-            }
-          } catch (e) {
-            console.warn("[LiveKit] Token refresh failed, will retry", e);
-          }
-        };
-        fetchLkToken();
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
     const ch = supabase.channel(`battle-${id}`)
       .on("broadcast", { event: "chat" }, ({ payload }: { payload: any }) => setMessages(p => [...p, payload]))
       .on("broadcast", { event: "score" }, ({ payload }: { payload: any }) => {
@@ -511,14 +525,13 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       ch.unsubscribe().then(() => {
         supabase.removeChannel(ch); 
       });
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [id, supabase, wakeCount]);
 
   // Generate LiveKit Token with exponential retry
   const lkRetryCount = useRef(0);
   const fetchLivekitToken = React.useCallback(async () => {
-    if (!profile || !id || !battleData) return;
+    if (!profile || !id || !battleData) return "";
     const role = mySide === "Audience" ? "Audience" : "Publisher";
     try {
       const res = await fetch(`/api/livekit/token?room=${id}&username=${profile.username}&role=${role}&t=${Date.now()}`);
@@ -526,6 +539,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       if (data.token) {
         setLivekitToken(data.token);
         lkRetryCount.current = 0;
+        return data.token;
       } else {
         throw new Error("No token in response");
       }
@@ -534,6 +548,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       const delay = Math.min(1000 * Math.pow(2, lkRetryCount.current), 15000);
       console.warn(`[LiveKit] Token fetch failed, retry #${lkRetryCount.current} in ${delay}ms`);
       setTimeout(fetchLivekitToken, delay);
+      return "";
     }
   }, [profile, id, battleData, mySide]);
 
@@ -962,13 +977,13 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       <LiveKitRoom
         serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
         token={livekitToken}
-        connect={!!livekitToken}
+        connect={true}
         connectOptions={{ autoSubscribe: true, peerConnectionTimeout: 15000 }}
         video={true}
         audio={true}
         className="flex flex-col flex-[4] min-h-0 relative"
       >
-        <RoomReconnectOnFocus onRequestNewToken={fetchLivekitToken} />
+        <RoomReconnectOnFocus onRequestNewToken={fetchLivekitToken} livekitToken={livekitToken} />
         <RoomWatcher playerA={playerA?.username} playerB={playerB?.username} onBothConnected={setBothConnected} onOpponentGhost={setIsOpponentGhost} />
         
         {/* GLOBAL PANORAMIC OVERLAY FOR PREPARING — latched, never re-shows */}
