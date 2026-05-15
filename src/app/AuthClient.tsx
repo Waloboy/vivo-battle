@@ -35,6 +35,7 @@ export default function AuthClient() {
           email,
           password,
           options: {
+            emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : 'https://arena58.vercel.app/dashboard',
             data: {
               username,
             },

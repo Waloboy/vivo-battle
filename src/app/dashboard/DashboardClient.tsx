@@ -259,7 +259,7 @@ export default function ExploreDashboard() {
 
     // Use abort signal instead of Promise.race to truly cancel hung requests
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => { controller.abort(); setLoading(false); }, 5000); // 5s timeout for Washington DC latency
+    const timeoutId = setTimeout(() => { controller.abort(); setLoading(false); }, 3000); // 3s timeout
     
     // add abortSignal to the query execution
     const { data, error } = await query.abortSignal(controller.signal);

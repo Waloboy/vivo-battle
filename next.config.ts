@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: false,
   skipTrailingSlashRedirect: true,
-  generateBuildId: async () => `build-${Date.now()}`,
+  generateBuildId: async () => 'v1-arena58',
   allowedDevOrigins: ['192.168.10.123', 'localhost:3000'],
   transpilePackages: ['livekit-client', '@livekit/components-react'],
   turbopack: {},

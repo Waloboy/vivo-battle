@@ -55,11 +55,22 @@ export default function ProfileViewComponent() {
   const supabase = createClient();
 
   async function fetchProfile() {
+    // Timeout forzado de 3 segundos para matar el spinner
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => { controller.abort(); setLoading(false); }, 3000);
+
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) { setLoading(false); return; }
+      if (!currentUser) { clearTimeout(timeoutId); setLoading(false); return; }
 
-      const { data: profileData } = await supabase.from("profiles").select("*").eq("id", currentUser.id).single();
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", currentUser.id)
+        .abortSignal(controller.signal)
+        .single();
+      
+      clearTimeout(timeoutId);
       if (profileData) {
         setProfile(profileData);
         setOriginalUsername(profileData.username);
