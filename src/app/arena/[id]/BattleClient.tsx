@@ -8,8 +8,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Wallet, Gift, X, Heart, Mic, MicOff, Trophy, Swords, Loader2 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { createClient } from "@/utils/supabase/client";
-import { GIFT_CATALOG, type GiftKey } from "../gifts";
-import { useAnimatedCount } from "../useAnimatedCount";
+import { GIFT_CATALOG, type GiftKey } from "./gifts";
+import { useAnimatedCount } from "./useAnimatedCount";
 import { getWalletCredits } from "@/utils/balance";
 import { fmtWCR, fmtBCR } from "@/utils/format";
 
