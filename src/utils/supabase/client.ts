@@ -31,7 +31,7 @@ export function createClient() {
 
     // ── Realtime Auto-Reconnect Timer ──
     // If the WebSocket dies (mobile network switch, sleep, etc.),
-    // attempt to reconnect every 3 seconds instead of staying dead.
+    // attempt to reconnect every 5 seconds instead of staying dead.
     setInterval(() => {
       if (!client?.realtime) return;
       try {
@@ -43,7 +43,7 @@ export function createClient() {
       } catch (e) {
         // connectionState() may throw if realtime isn't initialized yet — safe to ignore
       }
-    }, 3000);
+    }, 5000);
   }
   return client;
 }

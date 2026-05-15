@@ -33,7 +33,14 @@ export default function RootLayout({
 // SW was causing 404 on RSC routes and killing Supabase WebSockets.
 // This script purges any lingering SW from user devices.
 (function() {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+  if (typeof window === 'undefined') return;
+  if(!localStorage.getItem('purged')){ 
+    localStorage.clear(); 
+    sessionStorage.clear(); 
+    localStorage.setItem('purged', 'true'); 
+    window.location.reload(); 
+  }
+  if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.getRegistrations().then(function(regs) {
     regs.forEach(function(r) {
       r.unregister().then(function() {
