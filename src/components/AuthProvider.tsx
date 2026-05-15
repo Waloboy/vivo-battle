@@ -39,36 +39,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const didInit = useRef(false);
   const isRefreshing = useRef(false);
 
-  // ── Persist auth state to storage ──
+  // ── Persist auth state to sessionStorage ONLY (Memoria Cero) ──
   const persistAuth = useCallback((newUser: any, newProfile: any, newIsAdmin: boolean) => {
     if (typeof window === "undefined") return;
 
     if (newUser && newProfile) {
-      const userData = JSON.stringify(newUser);
-      const profileData = JSON.stringify(newProfile);
-      const adminStr = String(newIsAdmin);
-
-      localStorage.setItem("vivo_user_data", userData);
-      localStorage.setItem("vivo_user_profile", profileData);
-      localStorage.setItem("vivo_is_admin", adminStr);
-      sessionStorage.setItem("vivo_user_data", userData);
-      sessionStorage.setItem("vivo_user_profile", profileData);
-      sessionStorage.setItem("vivo_is_admin", adminStr);
+      sessionStorage.setItem("vivo_user_data", JSON.stringify(newUser));
+      sessionStorage.setItem("vivo_user_profile", JSON.stringify(newProfile));
+      sessionStorage.setItem("vivo_is_admin", String(newIsAdmin));
     } else {
-      localStorage.removeItem("vivo_user_data");
-      localStorage.removeItem("vivo_user_profile");
-      localStorage.removeItem("vivo_is_admin");
       sessionStorage.removeItem("vivo_user_data");
       sessionStorage.removeItem("vivo_user_profile");
       sessionStorage.removeItem("vivo_is_admin");
-
-      // Force delete supabase token
-      if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
-        const host = process.env.NEXT_PUBLIC_SUPABASE_URL.split("//")[1]?.split(".")[0];
-        if (host) {
-          localStorage.removeItem(`sb-${host}-auth-token`);
-        }
-      }
     }
   }, []);
 
@@ -136,22 +118,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (didInit.current) return;
     didInit.current = true;
 
-    // Step 1: INSTANT hydration from storage (prevents loading flash)
-    // This runs in useEffect (after mount) so it's hydration-safe — no #418
+    // Step 1: INSTANT hydration from sessionStorage ONLY (Memoria Cero)
+    // No localStorage reads — it's poisoned territory
     if (typeof window !== "undefined") {
       try {
-        const storedUser = sessionStorage.getItem("vivo_user_data")
-          || localStorage.getItem("vivo_user_data");
-        const storedProfile = sessionStorage.getItem("vivo_user_profile")
-          || localStorage.getItem("vivo_user_profile");
-        const storedAdmin = sessionStorage.getItem("vivo_is_admin")
-          || localStorage.getItem("vivo_is_admin");
+        const storedUser = sessionStorage.getItem("vivo_user_data");
+        const storedProfile = sessionStorage.getItem("vivo_user_profile");
+        const storedAdmin = sessionStorage.getItem("vivo_is_admin");
 
         if (storedUser && storedProfile) {
           setUser(JSON.parse(storedUser));
           setProfile(JSON.parse(storedProfile));
           setIsAdmin(storedAdmin === "true");
-          setLoading(false); // We have cached data — show it immediately
+          setLoading(false);
         }
       } catch { /* corrupt storage, fall through to refreshAuth */ }
     }

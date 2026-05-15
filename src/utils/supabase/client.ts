@@ -22,12 +22,14 @@ export function createClient() {
           persistSession: true,
           autoRefreshToken: true,
           detectSessionInUrl: true,
+          storage: sessionStorage, // MEMORIA CERO: session dies when tab closes
+          flowType: 'pkce', // No eval() — CSP safe
         },
         realtime: {
           params: {
             eventsPerSecond: 10,
           },
-          heartbeatIntervalMs: 3000, // Pulso cada 3 segundos para mantener vivo el WebSocket
+          heartbeatIntervalMs: 3000,
         },
         global: {
           headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }

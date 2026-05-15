@@ -30,26 +30,30 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
-// ── ARENA 58: FORCE UNREGISTER ALL SERVICE WORKERS ──
-// SW was causing 404 on RSC routes and killing Supabase WebSockets.
-// This script purges any lingering SW from user devices.
+// ── ARENA 58: MEMORIA CERO ──
+// Auth now lives in sessionStorage only. localStorage is enemy territory.
+// On every page load: nuke localStorage, kill SWs, purge caches.
 (function() {
   if (typeof window === 'undefined') return;
-  if(!localStorage.getItem('purged')){ 
-    localStorage.clear(); 
-    sessionStorage.clear(); 
-    localStorage.setItem('purged', 'true'); 
-    window.location.reload(); 
-  }
-  if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.getRegistrations().then(function(regs) {
-    regs.forEach(function(r) {
-      r.unregister().then(function() {
-        console.log('[SW] Unregistered:', r.scope);
-      });
+
+  // 1. PURGE localStorage — auth is in sessionStorage now, localStorage is poison
+  try {
+    var keys = [];
+    for (var i = 0; i < localStorage.length; i++) { keys.push(localStorage.key(i)); }
+    keys.forEach(function(k) {
+      if (k && k.indexOf('sb-') === 0) { localStorage.removeItem(k); }
+      if (k && k.indexOf('vivo_') === 0) { localStorage.removeItem(k); }
     });
-  });
-  // Purge all caches left behind by the old SW
+  } catch(e) {}
+
+  // 2. KILL all Service Workers — they cache 404s
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(regs) {
+      regs.forEach(function(r) { r.unregister(); });
+    });
+  }
+
+  // 3. PURGE all caches left by old SWs
   if ('caches' in window) {
     caches.keys().then(function(names) {
       names.forEach(function(name) { caches.delete(name); });
