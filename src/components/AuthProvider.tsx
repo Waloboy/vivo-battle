@@ -150,31 +150,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // Step 4: CENTRALIZED Visibility Change Handler
-    // Silently re-fetch auth data + reconnect Supabase realtime when tab returns.
-    // NO router.refresh(), NO window.location.reload() — those cause 404 / infinite loops.
+    // Step 4: Visibility Change — just re-fetch auth, no realtime reconnection needed
+    // Longpolling handles its own transport. We only refresh the session.
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "visible") return;
-
-      console.log("[Auth] Tab visible — re-fetching auth + reconnecting realtime");
-
-      // Re-validate session silently (won't wipe state on network error)
       refreshAuth();
-
-      // Reconnect Supabase WebSocket if it died while tab was hidden
-      if (supabase.realtime) {
-        try {
-          const state = supabase.realtime.connectionState();
-          if (state !== "open" && state !== "connecting") {
-            console.log("[Auth] WebSocket was", state, "— reconnecting...");
-            supabase.realtime.connect();
-          }
-        } catch (e) {
-          console.warn("[Auth] realtime reconnect failed:", e);
-        }
-      }
-
-      // Notify child components to re-fetch their data
       window.dispatchEvent(new Event("vivo_wakeup"));
     };
 

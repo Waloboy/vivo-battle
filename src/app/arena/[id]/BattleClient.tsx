@@ -488,6 +488,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
     };
     initBattleData();
 
+    // ── Broadcast-only channel (chat, rematch, battle events) ──
     const ch = supabase.channel(`battle-${id}`)
       .on("broadcast", { event: "chat" }, ({ payload }: { payload: any }) => setMessages(p => [...p, payload]))
       .on("broadcast", { event: "rematch_request" }, ({ payload }: { payload: any }) => {
@@ -502,7 +503,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
          setRematchB(false);
          setIsFinishedLocally(false);
          setHasSettledPoints(false);
-         setHasStartedBattle(false); // Allow VS screen for rematch
+         setHasStartedBattle(false);
          setHasBroadcastedStart(false);
          setBothConnected(false);
          setTimeLeft(calculateTimeLeft(payload.started_at));
@@ -514,32 +515,35 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       .on("broadcast", { event: "battle_exit" }, () => {
          window.location.href = "/dashboard";
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "battles", filter: `id=eq.${id}` }, (payload: any) => {
-         if (payload.new.started_at) {
-           setBattleData((prev: any) => ({ ...prev, started_at: payload.new.started_at }));
-           setTimeLeft(calculateTimeLeft(payload.new.started_at));
-         }
-         // ⭐ POINTS RECOVERY via DB: sync scores when DB is updated
-         if (typeof payload.new.score_a === 'number') setRawA(payload.new.score_a);
-         if (typeof payload.new.score_b === 'number') setRawB(payload.new.score_b);
-         // ⭐ If marked inactive by server, mark as finished
-         if (payload.new.is_active === false) setIsFinishedLocally(true);
-      });
-      
-    ch.subscribe((status: string) => {
-      console.log(`[Arena] Channel status: ${status}`);
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        console.log('[Arena] Channel died — auto-resubscribing in 1s...');
-        setTimeout(() => {
-          if (isMounted) {
-            ch.subscribe();
+      .subscribe();
+
+    // ── HTTP Polling for battle scores & status (replaces postgres_changes) ──
+    const pollInterval = setInterval(async () => {
+      if (!isMounted) return;
+      try {
+        const { data: freshBattle } = await supabase
+          .from("battles")
+          .select("score_a, score_b, is_active, started_at")
+          .eq("id", id)
+          .single();
+        
+        if (freshBattle && isMounted) {
+          if (typeof freshBattle.score_a === 'number') setRawA(freshBattle.score_a);
+          if (typeof freshBattle.score_b === 'number') setRawB(freshBattle.score_b);
+          if (freshBattle.started_at) {
+            setBattleData((prev: any) => ({ ...prev, started_at: freshBattle.started_at }));
+            setTimeLeft(calculateTimeLeft(freshBattle.started_at));
           }
-        }, 1000);
+          if (freshBattle.is_active === false) setIsFinishedLocally(true);
+        }
+      } catch (e) {
+        // Silent — don't crash arena on a polling miss
       }
-    });
+    }, 2000);
       
     return () => { 
       isMounted = false;
+      clearInterval(pollInterval);
       if (currentController) currentController.abort();
       ch.unsubscribe().then(() => {
         supabase.removeChannel(ch); 

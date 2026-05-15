@@ -112,48 +112,39 @@ export default function ExploreDashboard() {
     return () => window.removeEventListener("vivo_wakeup", onWake);
   }, []);
 
-  // ── Realtime subscription for live updates (PRIORITY) ──
+  // ── HTTP Polling for live battle updates (replaces WebSocket postgres_changes) ──
   useEffect(() => {
-    if (!user || !user.id) return; // Wait for user to be available
+    if (!user || !user.id) return;
 
+    // Poll battles every 2 seconds for live score/status updates
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data } = await supabase
+          .from("battles")
+          .select(`
+            *,
+            player_a:profiles!battles_player_a_id_fkey(username, avatar_url),
+            player_b:profiles!battles_player_b_id_fkey(username, avatar_url)
+          `)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        
+        if (data) {
+          setBattles(prev => {
+            // Merge polled data with existing, preserving order
+            const merged = data as Battle[];
+            return merged.length > 0 ? merged : prev.filter((b: any) => b.is_active);
+          });
+        }
+      } catch (e) {
+        // Silent — don't crash the UI on a polling miss
+      }
+    }, 2000);
+
+    // Keep a lightweight broadcast channel ONLY for challenge acceptance redirects
     const channel = supabase
-      .channel("global-sync")
-      // Listen for score updates and status changes
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "battles" },
-        (payload: any) => {
-          setBattles(prev =>
-            prev.map((b: any) =>
-              b.id === payload.new.id
-                ? { ...b, score_a: payload.new.score_a, score_b: payload.new.score_b, is_active: payload.new.is_active }
-                : b
-            ).filter((b: any) => b.is_active)
-          );
-        }
-      )
-      // Listen for new battles being created
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "battles" },
-        async (payload: any) => {
-          // Fetch full data for the new battle including profiles
-          const { data: newBattle } = await supabase
-            .from("battles")
-            .select(`
-              *,
-              player_a:profiles!battles_player_a_id_fkey(username, avatar_url),
-              player_b:profiles!battles_player_b_id_fkey(username, avatar_url)
-            `)
-            .eq("id", payload.new.id)
-            .single();
-          
-          if (newBattle && newBattle.is_active) {
-            setBattles(prev => [newBattle as Battle, ...prev].slice(0, 50));
-          }
-        }
-      )
-      // Listen for challenge acceptance directly via broadcast
+      .channel("challenge-redirect")
       .on(
         "broadcast",
         { event: "CHALLENGE_ACCEPTED" },
@@ -166,6 +157,7 @@ export default function ExploreDashboard() {
       .subscribe();
 
     return () => { 
+      clearInterval(pollInterval);
       channel.unsubscribe().then(() => supabase.removeChannel(channel)); 
     };
   }, [supabase, wakeCount, user]);

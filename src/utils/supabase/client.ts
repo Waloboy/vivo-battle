@@ -1,6 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr'
 
-// Singleton — all components share ONE client & ONE realtime connection
+// Singleton — all components share ONE client & ONE connection
 let client: ReturnType<typeof createBrowserClient> | null = null;
 
 export function createClient() {
@@ -22,50 +22,14 @@ export function createClient() {
           persistSession: true,
           autoRefreshToken: true,
           detectSessionInUrl: true,
-          storage: sessionStorage, // MEMORIA CERO: session dies when tab closes
-          flowType: 'pkce', // No eval() — CSP safe
-        },
-        realtime: {
-          params: {
-            eventsPerSecond: 10,
-          },
-          heartbeatIntervalMs: 3000,
+          storage: sessionStorage,
+          flowType: 'pkce',
         },
         global: {
           headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
         }
       }
     );
-
-    // ── Realtime Auto-Reconnect Timer (Marcapasos) ──
-    // If the WebSocket dies (mobile network switch, sleep, etc.),
-    // attempt to reconnect every 3 seconds instead of staying dead.
-    setInterval(() => {
-      if (!client?.realtime) return;
-      try {
-        const state = client.realtime.connectionState();
-        if (state !== 'open' && state !== 'connecting') {
-          console.log('[Supabase] WebSocket dead (' + state + ') — auto-reconnecting...');
-          client.realtime.connect();
-        }
-      } catch (e) {
-        // connectionState() may throw if realtime isn't initialized yet — safe to ignore
-      }
-    }, 3000);
-
-    // ── Visibility Change: Immediate Reconnect ──
-    // When the user returns to the tab, force reconnect NOW instead of waiting for the interval
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && client?.realtime) {
-        try {
-          const state = client.realtime.connectionState();
-          if (state !== 'open' && state !== 'connecting') {
-            console.log('[Supabase] Tab visible — forcing immediate reconnect...');
-            client.realtime.connect();
-          }
-        } catch (e) { /* safe to ignore */ }
-      }
-    });
   }
   return client;
 }
