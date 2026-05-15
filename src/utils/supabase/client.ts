@@ -23,15 +23,21 @@ export function createClient() {
           autoRefreshToken: true,
           detectSessionInUrl: true,
         },
+        realtime: {
+          params: {
+            eventsPerSecond: 10,
+          },
+          heartbeatIntervalMs: 3000, // Pulso cada 3 segundos para mantener vivo el WebSocket
+        },
         global: {
           headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
         }
       }
     );
 
-    // ── Realtime Auto-Reconnect Timer ──
+    // ── Realtime Auto-Reconnect Timer (Marcapasos) ──
     // If the WebSocket dies (mobile network switch, sleep, etc.),
-    // attempt to reconnect every 5 seconds instead of staying dead.
+    // attempt to reconnect every 3 seconds instead of staying dead.
     setInterval(() => {
       if (!client?.realtime) return;
       try {
@@ -43,7 +49,21 @@ export function createClient() {
       } catch (e) {
         // connectionState() may throw if realtime isn't initialized yet — safe to ignore
       }
-    }, 5000);
+    }, 3000);
+
+    // ── Visibility Change: Immediate Reconnect ──
+    // When the user returns to the tab, force reconnect NOW instead of waiting for the interval
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && client?.realtime) {
+        try {
+          const state = client.realtime.connectionState();
+          if (state !== 'open' && state !== 'connecting') {
+            console.log('[Supabase] Tab visible — forcing immediate reconnect...');
+            client.realtime.connect();
+          }
+        } catch (e) { /* safe to ignore */ }
+      }
+    });
   }
   return client;
 }

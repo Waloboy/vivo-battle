@@ -526,7 +526,17 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
          if (payload.new.is_active === false) setIsFinishedLocally(true);
       });
       
-    ch.subscribe();
+    ch.subscribe((status: string) => {
+      console.log(`[Arena] Channel status: ${status}`);
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        console.log('[Arena] Channel died — auto-resubscribing in 1s...');
+        setTimeout(() => {
+          if (isMounted) {
+            ch.subscribe();
+          }
+        }, 1000);
+      }
+    });
       
     return () => { 
       isMounted = false;
