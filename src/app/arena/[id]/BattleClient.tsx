@@ -171,8 +171,15 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
       {trackRef && isCameraEnabled ? (
         <VideoTrack trackRef={trackRef as any} className="w-full h-full object-cover scale-[1.02]" />
       ) : (
-        <div className="w-full h-full bg-[#0d0008] flex items-center justify-center">
-          <span className="text-white/30 text-xs">Esperando cámara...</span>
+        <div className="w-full h-full bg-[#0d0008] flex items-center justify-center flex-col gap-2">
+          {phase === "PREPARING" ? (
+            <>
+              <span className="text-white/30 text-[10px] font-black tracking-[0.3em] uppercase animate-pulse">Calentamiento</span>
+              <span className="text-white/40 text-3xl font-mono font-black">{fmtTime(displayTime)}</span>
+            </>
+          ) : (
+            <span className="text-white/30 text-xs">Esperando cámara...</span>
+          )}
         </div>
       )}
       
@@ -278,48 +285,38 @@ function BattleVideo({ expectedUsername, phase, playerA, playerB, displayTime, i
 // --- LiveKit Local Controls (Mic only — flip camera removed) ---
 function LocalControls({ phase }: { phase: BattlePhase }) {
   const isWarmup = phase === "PREPARING";
-  const { localParticipant } = useLocalParticipant();
+  const room = useRoomContext();
   const [isMuted, setIsMuted] = useState(false);
-  const cameraRetryRef = useRef(0);
 
   useEffect(() => {
-    if (!localParticipant) return;
-    cameraRetryRef.current = 0;
+    if (!room || !room.localParticipant) {
+      console.error("[LIVEKIT CRITICAL]: El objeto room o localParticipant no existe en LocalControls al intentar configurar dispositivos.");
+      return;
+    }
 
-    // Mic — fire and forget
-    localParticipant.setMicrophoneEnabled(true)
-      .catch(e => console.warn("[Mic] Failed (non-blocking):", e.message));
+    if (phase === "PREPARING") {
+      // 1. INICIALIZACIÓN VIVA DESDE EL CALENTAMIENTO
+      room.localParticipant.setCameraEnabled(false).catch(() => {});
+      room.localParticipant.setMicrophoneEnabled(true).catch(() => {});
+    } else {
+      // 2. DISPARO LIMPIO AL INICIAR LA BATALLA
+      console.log("[LIVEKIT]: Iniciando batalla real. Encendiendo cámaras...");
+      room.localParticipant.setCameraEnabled(true)
+        .then(() => console.log("[LIVEKIT]: Cámara encendida con éxito"))
+        .catch((err) => console.error("[LIVEKIT ERROR]: No se pudo encender la cámara", err));
+      room.localParticipant.setMicrophoneEnabled(true).catch(() => {});
+    }
+  }, [room, phase]);
 
-    // Camera — retry up to 3 times with 3s gap, NEVER block the app
-    const shouldCamera = phase !== "PREPARING";
-    if (!shouldCamera) return;
-
-    const tryCamera = async () => {
-      try {
-        await localParticipant.setCameraEnabled(true, { facingMode: "user" });
-        console.log("[Camera] Enabled successfully");
-        cameraRetryRef.current = 0;
-      } catch (e: any) {
-        cameraRetryRef.current += 1;
-        console.warn(`[Camera] Attempt ${cameraRetryRef.current} failed: ${e.message}`);
-        if (cameraRetryRef.current < 3) {
-          setTimeout(tryCamera, 3000);
-        } else {
-          console.warn("[Camera] All retries exhausted — continuing without video");
-        }
-      }
-    };
-    tryCamera();
-  }, [localParticipant, phase]);
-
-  if (isWarmup || !localParticipant) return null;
+  if (isWarmup || !room?.localParticipant) return null;
 
   const toggleMute = async () => {
+    if (!room?.localParticipant) return;
     if (isMuted) {
-      await localParticipant.setMicrophoneEnabled(true);
+      await room.localParticipant.setMicrophoneEnabled(true);
       setIsMuted(false);
     } else {
-      await localParticipant.setMicrophoneEnabled(false);
+      await room.localParticipant.setMicrophoneEnabled(false);
       setIsMuted(true);
     }
   };
@@ -1032,7 +1029,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
           <div className="bg-black/80 border border-white/10 px-3 py-1 rounded-full">
             <span className={`font-mono font-black text-xs tracking-widest ${isUrgent ? "text-red-500 animate-pulse" : isOpponentGhost ? "text-yellow-400 animate-pulse" : "text-white/90"}`}>
               {phase === "PREPARING" 
-                ? (hasStartedBattle ? `INICIA ${fmtTime(displayTime)}` : bothConnected ? `INICIA ${fmtTime(displayTime)}` : "ESPERANDO...") 
+                ? `INICIA ${fmtTime(displayTime)}` 
                 : isOpponentGhost ? `RECONECTANDO... ${fmtTime(displayTime)}` 
                 : phase === "ENDING" ? `FIN ${fmtTime(displayTime)}` 
                 : fmtTime(displayTime)}
@@ -1059,7 +1056,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         connect={true}
         connectOptions={{ autoSubscribe: true, peerConnectionTimeout: 15000 }}
         options={{ reconnectPolicy: new DefaultReconnectPolicy([2000, 5000]) }}
-        video={true}
+        video={false}
         audio={true}
         className="flex flex-col flex-[4] min-h-0 relative"
       >
