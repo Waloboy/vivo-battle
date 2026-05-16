@@ -26,42 +26,6 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark" suppressHydrationWarning>
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-// ── ARENA 58: MEMORIA CERO ──
-// Auth now lives in sessionStorage only. localStorage is enemy territory.
-// On every page load: nuke localStorage, kill SWs, purge caches.
-(function() {
-  if (typeof window === 'undefined') return;
-
-  // 1. PURGE localStorage — auth is in sessionStorage now, localStorage is poison
-  try {
-    var keys = [];
-    for (var i = 0; i < localStorage.length; i++) { keys.push(localStorage.key(i)); }
-    keys.forEach(function(k) {
-      if (k && k.indexOf('sb-') === 0) { localStorage.removeItem(k); }
-      if (k && k.indexOf('vivo_') === 0) { localStorage.removeItem(k); }
-    });
-  } catch(e) {}
-
-  // 2. KILL all Service Workers — they cache 404s
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(function(regs) {
-      regs.forEach(function(r) { r.unregister(); });
-    });
-  }
-
-  // 3. PURGE all caches left by old SWs
-  if ('caches' in window) {
-    caches.keys().then(function(names) {
-      names.forEach(function(name) { caches.delete(name); });
-    });
-  }
-})();
-`,
-          }}
-        />
       </head>
       <body 
         suppressHydrationWarning 

@@ -17,71 +17,89 @@ export interface DualBalance {
   total: number;
 }
 
+const balanceFetchLocks = new Map<string, Promise<DualBalance>>();
+
 export async function getDualBalance(userId: string): Promise<DualBalance> {
-  const cacheKey = `vivo_balance_${userId}`;
-  let cached: DualBalance | null = null;
-  
-  if (typeof window !== "undefined") {
-    try {
-      const stored = localStorage.getItem(cacheKey);
-      if (stored) cached = JSON.parse(stored);
-    } catch (e) {
-      console.warn("Failed to parse cached balance", e);
-    }
+  // 1. Return existing in-flight promise if loading
+  if (balanceFetchLocks.has(userId)) {
+    return balanceFetchLocks.get(userId) as Promise<DualBalance>;
   }
 
-  const supabase = createClient();
-  let retries = 3;
-  let profile = null;
-  let error = null;
-
-  while (retries > 0) {
-    const fetchPromise = supabase
-      .from("profiles")
-      .select("wallet_credits, battle_credits")
-      .eq("id", userId)
-      .single();
-
-    const timeoutPromise = new Promise<{ data: any, error: any }>((resolve) => 
-      setTimeout(() => resolve({ data: null, error: new Error("Supabase timeout") }), 15000)
-    );
-
-    const result = await Promise.race([fetchPromise, timeoutPromise]);
-    profile = result.data;
-    error = result.error;
-
-    if (!error && profile) break;
+  // 2. Wrap the fetch logic
+  const fetchPromise = (async () => {
+    const cacheKey = `vivo_balance_${userId}`;
+    let cached: DualBalance | null = null;
     
-    console.warn(`[Balance Fetch] Attempt failed. Retries left: ${retries - 1}`, error);
-    retries--;
-    if (retries > 0) await new Promise(r => setTimeout(r, 1000)); // wait 1s before retry
-  }
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem(cacheKey);
+        if (stored) cached = JSON.parse(stored);
+      } catch (e) {
+        console.warn("Failed to parse cached balance", e);
+      }
+    }
 
-  try {
-    if (error || !profile) {
-      console.error("Error fetching dual balance from profile after retries:", error);
+    const supabase = createClient();
+    let retries = 3;
+    let profile = null;
+    let error = null;
+
+    while (retries > 0) {
+      const fetchPromiseCall = supabase
+        .from("profiles")
+        .select("wallet_credits, battle_credits")
+        .eq("id", userId)
+        .single();
+
+      const timeoutPromise = new Promise<{ data: any, error: any }>((resolve) => 
+        setTimeout(() => resolve({ data: null, error: new Error("Supabase timeout") }), 15000)
+      );
+
+      const result = await Promise.race([fetchPromiseCall, timeoutPromise]);
+      profile = result.data;
+      error = result.error;
+
+      if (!error && profile) break;
+      
+      console.warn(`[Balance Fetch] Attempt failed. Retries left: ${retries - 1}`, error);
+      retries--;
+      if (retries > 0) await new Promise(r => setTimeout(r, 1000)); // wait 1s before retry
+    }
+
+    try {
+      if (error || !profile) {
+        console.error("Error fetching dual balance from profile after retries:", error);
+        if (cached) return cached;
+        return { wallet_credits: 0, battle_credits: 0, total: 0 };
+      }
+
+      const wallet_credits = profile.wallet_credits || 0;
+      const battle_credits = profile.battle_credits || 0;
+
+      const result = {
+        wallet_credits: Math.max(0, wallet_credits),
+        battle_credits: Math.max(0, battle_credits),
+        total: Math.max(0, wallet_credits) + Math.max(0, battle_credits),
+      };
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem(cacheKey, JSON.stringify(result));
+      }
+
+      return result;
+    } catch (err) {
+      console.error("Exception fetching dual balance:", err);
       if (cached) return cached;
       return { wallet_credits: 0, battle_credits: 0, total: 0 };
     }
+  })();
 
-    const wallet_credits = profile.wallet_credits || 0;
-    const battle_credits = profile.battle_credits || 0;
-
-    const result = {
-      wallet_credits: Math.max(0, wallet_credits),
-      battle_credits: Math.max(0, battle_credits),
-      total: Math.max(0, wallet_credits) + Math.max(0, battle_credits),
-    };
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem(cacheKey, JSON.stringify(result));
-    }
-
-    return result;
-  } catch (err) {
-    console.error("Exception fetching dual balance:", err);
-    if (cached) return cached;
-    return { wallet_credits: 0, battle_credits: 0, total: 0 };
+  // 3. Store the lock, await, and clean up
+  balanceFetchLocks.set(userId, fetchPromise);
+  try {
+    return await fetchPromise;
+  } finally {
+    balanceFetchLocks.delete(userId);
   }
 }
 

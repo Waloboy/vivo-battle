@@ -66,7 +66,8 @@ function simulateViewers(battleId: string, scoreA: number, scoreB: number): numb
 export default function ExploreDashboard() {
   // SafeHydrate in page.tsx guarantees this only runs in browser
   const supabase = useMemo(() => createClient(), []);
-  const { user, profile } = useAuth();
+  const { user, profile, session } = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("explore");
   const [battles, setBattles] = useState<Battle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +87,10 @@ export default function ExploreDashboard() {
   const [challengeSent, setChallengeSent] = useState<Set<string>>(new Set());
   const [matchmaking, setMatchmaking] = useState(false);
   const [wakeCount, setWakeCount] = useState(0);
+
+  // Challenge Waiting State
+  const [currentChallengeId, setCurrentChallengeId] = useState<string | null>(null);
+  const [isWaitingModalOpen, setIsWaitingModalOpen] = useState(false);
 
   useEffect(() => {
     // LIMPIEZA DE ESTADO AL CARGAR
@@ -114,12 +119,24 @@ export default function ExploreDashboard() {
 
   // ── HTTP Polling for live battle updates (replaces WebSocket postgres_changes) ──
   useEffect(() => {
-    if (!user || !user.id) return;
+    if (!user || !user.id || !session || !session.access_token) return;
 
-    // Poll battles every 2 seconds for live score/status updates
-    const pollInterval = setInterval(async () => {
+    let pollInterval: NodeJS.Timeout | null = null;
+    let isPolling = false;
+
+    const doPoll = async () => {
+      if (isPolling) return; // prevent overlap
+      if (!session || !session.access_token || !user?.id) {
+        console.warn("[Auth Guard]: Esperando rehidratación de sesión. Manteniendo estado.");
+        return;
+      }
+
+      isPolling = true;
+
       try {
-        const { data } = await supabase
+        console.log("URL de petición (Dashboard Poll):", `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/battles`, "Token:", !!session.access_token, "User:", user.id);
+
+        const { data, error } = await supabase
           .from("battles")
           .select(`
             *,
@@ -127,20 +144,49 @@ export default function ExploreDashboard() {
             player_b:profiles!battles_player_b_id_fkey(username, avatar_url)
           `)
           .eq("is_active", true)
-          .order("created_at", { ascending: false })
+          .order("started_at", { ascending: false })
           .limit(20);
         
-        if (data) {
-          setBattles(prev => {
-            // Merge polled data with existing, preserving order
-            const merged = data as Battle[];
-            return merged.length > 0 ? merged : prev.filter((b: any) => b.is_active);
-          });
+        if (error) {
+          console.error("[Poll Error]:", error);
+          return;
         }
+
+        if (!data || data.length === 0) {
+          console.warn("[Keep Alive]: Manteniendo datos anteriores en caché local.");
+          return;
+        }
+
+        const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).getTime();
+        
+        const dataFiltrada = data.filter((battle: any) => {
+          if (battle.status === 'finished' || battle.status === 'ended') return false;
+          if (battle.ended_at) return false;
+          
+          // Check if battle is older than 10 minutes (safety fallback)
+          if (battle.started_at) {
+            const started = new Date(battle.started_at).getTime();
+            if (started < tenMinAgo) return false;
+          }
+          
+          return true;
+        });
+
+        setBattles(dataFiltrada as Battle[]);
       } catch (e) {
-        // Silent — don't crash the UI on a polling miss
+        console.error("[Dashboard Poll] Network error:", e);
+      } finally {
+        isPolling = false;
       }
+    };
+
+    const interval = setInterval(() => {
+      if (document.hidden) return; // Freno absoluto
+      doPoll();
     }, 2000);
+
+    // Initial trigger
+    if (!document.hidden) doPoll();
 
     // Keep a lightweight broadcast channel ONLY for challenge acceptance redirects
     const channel = supabase
@@ -157,10 +203,50 @@ export default function ExploreDashboard() {
       .subscribe();
 
     return () => { 
-      clearInterval(pollInterval);
+      clearInterval(interval);
       channel.unsubscribe().then(() => supabase.removeChannel(channel)); 
     };
   }, [supabase, wakeCount, user]);
+
+  // ── Suscripción en tiempo real al reto (para el Celular A) ──
+  useEffect(() => {
+    if (!currentChallengeId) return;
+
+    const channel = supabase
+      .channel(`challenge_listen_${currentChallengeId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'challenges',
+          filter: `id=eq.${currentChallengeId}`
+        },
+        (payload: any) => {
+          console.log("[REALTIME] Challenge actualizado:", payload.new.status);
+          
+          // Si el Celular B aceptó el reto
+          if (payload.new.status === 'accepted') {
+            const targetBattleId = payload.new.battle_id;
+            if (targetBattleId) {
+              console.log("[REALTIME MATCH]: Reto aceptado. Moviendo a la arena:", targetBattleId);
+              
+              // Cerrar modal y limpiar canal
+              setIsWaitingModalOpen(false);
+              supabase.removeChannel(channel);
+              
+              // Redirección física dura a la ruta de la arena con el battle_id real
+              window.location.href = `/arena/${targetBattleId}`;
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentChallengeId, supabase]);
 
   // ── Initialize user & follows ──
   useEffect(() => {
@@ -253,33 +339,64 @@ export default function ExploreDashboard() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => { controller.abort(); setLoading(false); }, 3000); // 3s timeout
     
-    // add abortSignal to the query execution
-    const { data, error } = await query.abortSignal(controller.signal);
-    clearTimeout(timeoutId);
+    try {
+      // add abortSignal to the query execution
+      const { data, error } = await query.abortSignal(controller.signal);
+      clearTimeout(timeoutId);
 
-    if (error) {
-      console.error("Error fetching battles:", error);
-      if (!append) setBattles([]); 
+      // FORZAR cierre de loading INMEDIATO antes de evaluar data
       setLoading(false);
       setLoadingMore(false);
-      return;
+
+      if (error) {
+        console.error("Error fetching battles:", error);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        console.warn("[Keep Alive]: Manteniendo datos anteriores en caché local.");
+        setHasMore(false);
+        return;
+      }
+
+      const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).getTime();
+      
+      const dataFiltrada = data.filter((battle: any) => {
+        // Ignora batallas con estados terminados en base de datos
+        if (battle.status === 'finished' || battle.status === 'ended') return false;
+        if (battle.ended_at) return false;
+        
+        if (battle.started_at) {
+          const started = new Date(battle.started_at).getTime();
+          if (started < tenMinAgo) return false;
+        }
+        
+        return true;
+      });
+
+      const sortedData = (dataFiltrada || []).sort((a: Battle, b: Battle) => {
+        const totalA = (a.score_a || 0) + (a.score_b || 0);
+        const totalB = (b.score_a || 0) + (b.score_b || 0);
+        return totalB - totalA;
+      });
+
+      if (append) {
+        setBattles(prev => [...prev, ...sortedData]);
+      } else {
+        setBattles(sortedData);
+      }
+
+      setHasMore((data || []).length === PAGE_SIZE);
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.warn('Battles fetch timeout');
+      } else {
+        console.error('Battles fetch error:', err);
+      }
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
     }
-
-    const sortedData = (data || []).sort((a: Battle, b: Battle) => {
-      const totalA = (a.score_a || 0) + (a.score_b || 0);
-      const totalB = (b.score_a || 0) + (b.score_b || 0);
-      return totalB - totalA;
-    });
-
-    if (append) {
-      setBattles(prev => [...prev, ...sortedData]);
-    } else {
-      setBattles(sortedData);
-    }
-
-    setHasMore((data || []).length === PAGE_SIZE);
-    setLoading(false);
-    setLoadingMore(false);
   }, [supabase, followedUsers]);
 
   const prevTabRef = useRef<TabKey | null>(null);
@@ -365,10 +482,44 @@ export default function ExploreDashboard() {
     if (!user || challengeSending) return;
     setChallengeSending(targetId);
     
-    // Generar un ID predecible o único para el broadcast
-    const challengeId = crypto.randomUUID();
+    let realChallengeId: string | null = null;
+    
+    // 1. Guardar en DB para persistencia y obtener el ID real
+    try {
+      const { data: challengeData, error: challengeError } = await supabase
+        .from("challenges")
+        .insert({ 
+          challenger_id: user.id, // ID del Celular A
+          challenged_id: targetId, // ID del Celular B
+          status: 'pending'
+        })
+        .select()
+        .single();
 
-    // 1. Enviar Broadcast vía challenge-notif (Instantáneo, bypass de DB)
+      if (challengeError) {
+        console.error("[SUPABASE CHALLENGE ERROR]:", challengeError.message);
+        setChallengeSending(null);
+        return;
+      }
+
+      if (challengeData && challengeData.id) {
+        console.log("[SUCCESS]: Reto creado en tabla challenges con ID:", challengeData.id);
+        realChallengeId = challengeData.id;
+        setCurrentChallengeId(challengeData.id); // Guardamos el ID del RETO en el estado local
+        setIsWaitingModalOpen(true);
+      }
+    } catch (err) {
+      console.error("[CRITICAL CATCH]:", err);
+      setChallengeSending(null);
+      return;
+    }
+
+    if (!realChallengeId) {
+      setChallengeSending(null);
+      return;
+    }
+
+    // 2. Enviar Broadcast vía challenge-notif (Instantáneo, bypass de DB)
     let channel = supabase.getChannels().find((c: any) => c.topic === "realtime:challenge-notif");
     let needsUnsubscribe = false;
     
@@ -382,7 +533,7 @@ export default function ExploreDashboard() {
       type: "broadcast",
       event: "challenge",
       payload: {
-        id: challengeId,
+        id: realChallengeId,
         challenger_id: user.id,
         challenged_id: targetId,
         challenger_username: profile?.username || "Jugador",
@@ -395,13 +546,6 @@ export default function ExploreDashboard() {
         channel.unsubscribe().then(() => supabase.removeChannel(channel!));
       }, 1000); // Let it finish sending before killing
     }
-
-    // 2. Guardar en DB para persistencia
-    await supabase.from("challenges").insert({ 
-      id: challengeId, 
-      challenger_id: user.id, 
-      challenged_id: targetId 
-    });
 
     setChallengeSent(prev => new Set(prev).add(targetId));
     setChallengeSending(null);
@@ -416,6 +560,9 @@ export default function ExploreDashboard() {
         return next;
       });
       setChallengeSending(null);
+      // Auto-cerrar el modal si no responden
+      setIsWaitingModalOpen(false);
+      setCurrentChallengeId(null);
     }, 30000);
   };
 
@@ -469,6 +616,18 @@ export default function ExploreDashboard() {
   };
 
 
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) {
+    return (
+      <div className="flex-1 w-full flex items-center justify-center min-h-[50vh]">
+        <p className="text-white/30 text-xs">Cargando interfaz...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 w-full max-w-3xl mx-auto px-3 md:px-6 pb-8">

@@ -10,6 +10,7 @@ import { createClient } from "@/utils/supabase/client";
 interface AuthState {
   user: any;
   profile: any;
+  session: any;
   isAdmin: boolean;
   loading: boolean;
   refreshAuth: () => Promise<void>;
@@ -18,6 +19,7 @@ interface AuthState {
 const AuthContext = createContext<AuthState>({
   user: null,
   profile: null,
+  session: null,
   isAdmin: false,
   loading: true,
   refreshAuth: async () => {},
@@ -33,6 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // NEVER read from localStorage in useState initializer — that causes #418
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [session, setSession] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
 
@@ -40,30 +43,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isRefreshing = useRef(false);
 
   // ── Persist auth state to sessionStorage ONLY (Memoria Cero) ──
-  const persistAuth = useCallback((newUser: any, newProfile: any, newIsAdmin: boolean) => {
+  const persistAuth = useCallback((newUser: any, newProfile: any, newIsAdmin: boolean, newSession: any) => {
     if (typeof window === "undefined") return;
 
     if (newUser && newProfile) {
       sessionStorage.setItem("vivo_user_data", JSON.stringify(newUser));
       sessionStorage.setItem("vivo_user_profile", JSON.stringify(newProfile));
       sessionStorage.setItem("vivo_is_admin", String(newIsAdmin));
+      if (newSession) sessionStorage.setItem("vivo_session", JSON.stringify(newSession));
     } else {
       sessionStorage.removeItem("vivo_user_data");
       sessionStorage.removeItem("vivo_user_profile");
       sessionStorage.removeItem("vivo_is_admin");
+      sessionStorage.removeItem("vivo_session");
     }
   }, []);
 
   // Wrapper for state updates + persist
-  const safeUpdateAuth = useCallback((newUser: any, newProfile: any, newIsAdmin: boolean) => {
+  const safeUpdateAuth = useCallback((newUser: any, newProfile: any, newIsAdmin: boolean, newSession: any) => {
     setUser(newUser);
     setProfile(newProfile);
+    setSession(newSession);
     setIsAdmin(newIsAdmin);
-    persistAuth(newUser, newProfile, newIsAdmin);
+    persistAuth(newUser, newProfile, newIsAdmin, newSession);
   }, [persistAuth]);
 
   // ── fetchProfile: strict — only real DB data ────────────────────────────
-  const fetchProfile = useCallback(async (userId: string, currentUser: any): Promise<boolean> => {
+  const fetchProfile = useCallback(async (userId: string, currentUser: any, currentSession: any): Promise<boolean> => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => { controller.abort(); setLoading(false); }, 5000);
     try {
@@ -80,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      safeUpdateAuth(currentUser, data, data.role === "admin");
+      safeUpdateAuth(currentUser, data, data.role === "admin", currentSession);
       return true;
     } catch (e) {
       clearTimeout(timeoutId);
@@ -99,10 +105,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
-        await fetchProfile(session.user.id, session.user);
+        await fetchProfile(session.user.id, session.user, session);
       } else {
         // Only wipe state if we're sure there's no session (not a network error)
-        safeUpdateAuth(null, null, false);
+        safeUpdateAuth(null, null, false, null);
       }
     } catch (e) {
       // Network error — DON'T wipe state, keep cached data visible
@@ -133,29 +139,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
         }
       } catch { /* corrupt storage, fall through to refreshAuth */ }
+
+      // ── ARENA 58: Cleanup (Moved from layout <head> to prevent main thread blocking) ──
+      // Kill lingering Service Workers and browser caches ONCE per load.
+      try {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then((regs) => {
+            regs.forEach((r) => r.unregister());
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then((names) => {
+            names.forEach((name) => caches.delete(name));
+          });
+        }
+      } catch (e) {
+        console.warn("[Auth] Error during cache cleanup", e);
+      }
     }
 
     // Step 2: Validate session with Supabase (background, won't wipe on error)
     refreshAuth();
 
-    // Step 3: Auth state change listener
+    // Step 3: Auth state change listener — GUARDED against background phantom events
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (_event: any, session: any) => {
-        if (session?.user) {
-          await fetchProfile(session.user.id, session.user);
-        } else {
-          safeUpdateAuth(null, null, false);
+      async (event: any, currentSession: any) => {
+        // Freno atómico: si la pestaña está oculta, Supabase puede lanzar
+        // un falso SIGNED_OUT al despertar. Ignorar completamente.
+        if (document.hidden) {
+          console.warn("[Auth Guard]: Pestaña oculta, bloqueando mutación de sesión fantasma.");
+          return;
+        }
+
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          if (currentSession?.user) {
+            await fetchProfile(currentSession.user.id, currentSession.user, currentSession);
+          }
+        } else if (event === 'SIGNED_OUT') {
+          // Solo desloguear si el usuario explícitamente limpió la sesión estando activo
+          safeUpdateAuth(null, null, false, null);
+        } else if (currentSession?.user) {
+          // INITIAL_SESSION u otros eventos válidos con sesión real
+          await fetchProfile(currentSession.user.id, currentSession.user, currentSession);
         }
         setLoading(false);
       }
     );
 
-    // Step 4: Visibility Change — just re-fetch auth, no realtime reconnection needed
-    // Longpolling handles its own transport. We only refresh the session.
+    // Step 4: Re-check limpio al volver de segundo plano.
+    // No confiar en el listener congelado — hacer un getSession() fresco.
     const handleVisibilityChange = () => {
-      if (document.visibilityState !== "visible") return;
-      refreshAuth();
-      window.dispatchEvent(new Event("vivo_wakeup"));
+      if (!document.hidden) {
+        console.log("[Bypass Guard]: Pestaña reactivada. Forzando rehidratación limpia del navegador.");
+        // Forzar un refresco síncrono suave solo si la app se quedó en el limbo
+        window.location.reload();
+      }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -167,7 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshAuth, fetchProfile, supabase, safeUpdateAuth]);
 
   return (
-    <AuthContext.Provider value={{ user, profile, isAdmin, loading, refreshAuth }}>
+    <AuthContext.Provider value={{ user, profile, session, isAdmin, loading, refreshAuth }}>
       {children}
     </AuthContext.Provider>
   );

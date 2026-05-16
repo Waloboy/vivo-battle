@@ -61,7 +61,7 @@ export default function ProfileViewComponent() {
 
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) { clearTimeout(timeoutId); setLoading(false); return; }
+      if (!currentUser) { clearTimeout(timeoutId); return; }
 
       const { data: profileData } = await supabase
         .from("profiles")
@@ -71,6 +71,9 @@ export default function ProfileViewComponent() {
         .single();
       
       clearTimeout(timeoutId);
+      // FORZAR cierre de loading INMEDIATO antes de evaluar data
+      setLoading(false);
+
       if (profileData) {
         setProfile(profileData);
         setOriginalUsername(profileData.username);
@@ -81,13 +84,13 @@ export default function ProfileViewComponent() {
           if (diffDays < 15) setDaysUntilChange(15 - diffDays);
         }
       }
-      setLoading(false);
 
       // LAZY: heavy stats load after UI is visible
       fetchHeavyStats(currentUser.id, profileData?.total_earned || 0);
     } catch (fetchError) {
       console.error("Profile load error:", fetchError);
       setErrorPagina("Error al cargar perfil");
+    } finally {
       setLoading(false);
     }
   };

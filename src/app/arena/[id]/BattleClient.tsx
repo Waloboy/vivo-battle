@@ -8,13 +8,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Wallet, Gift, X, Heart, Mic, MicOff, Trophy, Swords, Loader2 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { createClient } from "@/utils/supabase/client";
+import { useAuth } from "@/components/AuthProvider";
 import { GIFT_CATALOG, type GiftKey } from "./gifts";
 import { useAnimatedCount } from "./useAnimatedCount";
 import { getWalletCredits } from "@/utils/balance";
 import { fmtWCR, fmtBCR } from "@/utils/format";
 
 import { LiveKitRoom, VideoTrack, AudioTrack, useTracks, useLocalParticipant, useParticipants } from '@livekit/components-react';
-import { Track, RoomEvent } from 'livekit-client';
+import { Track, RoomEvent, DefaultReconnectPolicy } from 'livekit-client';
 import '@livekit/components-styles';
 
 interface FloatTap { id: number; x: number; y: number }
@@ -82,25 +83,29 @@ function RoomReconnectOnFocus({ onRequestNewToken, livekitToken }: { onRequestNe
     if (!room) return;
 
     const handleVisibility = async () => {
-      if (!document.hidden) {
-        // Tab regained focus
-        if (room.state === "disconnected" || connectionState === "disconnected") {
-          console.log("[LiveKit] Room disconnected on focus.");
-          await room.disconnect();
-          if (isTokenExpired(livekitToken)) {
-            console.log("[LiveKit] Token expired, requesting new token...");
-            onRequestNewToken();
-          } else {
-            console.log("[LiveKit] Token valid, running prepareConnection()...");
-            room.prepareConnection(process.env.NEXT_PUBLIC_LIVEKIT_URL || "", livekitToken);
-          }
+      if (document.hidden) {
+        // GUARDIA: Pestaña oculta → desconectar sala para liberar hilos WebRTC
+        console.log("[LiveKit Guard]: Pestaña oculta, desconectando sala de forma segura.");
+        try { await room.disconnect(); } catch {}
+        return;
+      }
+
+      // Tab regained focus — reconectar solo si está desconectada
+      if (room.state === "disconnected" || connectionState === "disconnected") {
+        console.log("[LiveKit] Room disconnected on focus.");
+        if (isTokenExpired(livekitToken)) {
+          console.log("[LiveKit] Token expired, requesting new token...");
+          onRequestNewToken();
+        } else {
+          console.log("[LiveKit] Token valid, running prepareConnection()...");
+          try { room.prepareConnection(process.env.NEXT_PUBLIC_LIVEKIT_URL || "", livekitToken); } catch {}
         }
-        
-        // Recover Tracks (Camera/Mic)
-        if (room.localParticipant) {
-          room.localParticipant.setCameraEnabled(true).catch(console.warn);
-          room.localParticipant.setMicrophoneEnabled(true).catch(console.warn);
-        }
+      }
+
+      // Recover Tracks (Camera/Mic)
+      if (room.localParticipant) {
+        room.localParticipant.setCameraEnabled(true).catch(console.warn);
+        room.localParticipant.setMicrophoneEnabled(true).catch(console.warn);
       }
     };
 
@@ -110,13 +115,13 @@ function RoomReconnectOnFocus({ onRequestNewToken, livekitToken }: { onRequestNe
     const handleDisconnect = async () => {
       console.log("[LiveKit] RoomEvent.Disconnected triggered.");
       if (document.hidden) return; // If hidden, wait for visibilitychange
-      
-      await room.disconnect();
-      
+
+      try { await room.disconnect(); } catch {}
+
       if (isTokenExpired(livekitToken)) {
         onRequestNewToken();
       } else {
-        room.prepareConnection(process.env.NEXT_PUBLIC_LIVEKIT_URL || "", livekitToken);
+        try { room.prepareConnection(process.env.NEXT_PUBLIC_LIVEKIT_URL || "", livekitToken); } catch {}
       }
     };
     room.on(RoomEvent.Disconnected, handleDisconnect);
@@ -333,6 +338,9 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   const { id } = React.use(params);
   // SafeHydrate in page.tsx guarantees this only runs in browser
   const supabase = useMemo(() => createClient(), []);
+  const { session } = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => setIsMounted(true), []);
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [balance, setBalance] = useState(0);
@@ -518,32 +526,67 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
       .subscribe();
 
     // ── HTTP Polling for battle scores & status (replaces postgres_changes) ──
-    const pollInterval = setInterval(async () => {
-      if (!isMounted) return;
+    let pollInterval: NodeJS.Timeout | null = null;
+    let isPolling = false;
+
+    const doPoll = async () => {
+      if (!isMounted || isPolling) return;
+      if (!session || !session.access_token) {
+        console.warn("[Auth Guard]: Esperando rehidratación de sesión. Manteniendo estado.");
+        return; // Detiene la petición pero NO limpia el estado de React
+      }
+      isPolling = true;
+      
+      // Guard: skip if battle ID is missing
+      if (!id || id === 'undefined') {
+        console.warn("[Arena Poll] No valid battle ID — skipping");
+        isPolling = false;
+        return;
+      }
+
       try {
-        const { data: freshBattle } = await supabase
+        console.log("URL de petición (Arena Poll):", `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/battles?id=eq.${id}`, "Token:", !!session.access_token, "BattleID:", id);
+
+        const { data: freshBattle, error } = await supabase
           .from("battles")
           .select("score_a, score_b, is_active, started_at")
           .eq("id", id)
           .single();
         
+        if (error) {
+          console.error("[Poll Error]:", error);
+          return;
+        }
+
         if (freshBattle && isMounted) {
           if (typeof freshBattle.score_a === 'number') setRawA(freshBattle.score_a);
           if (typeof freshBattle.score_b === 'number') setRawB(freshBattle.score_b);
           if (freshBattle.started_at) {
-            setBattleData((prev: any) => ({ ...prev, started_at: freshBattle.started_at }));
+            setBattleData((prev: any) => prev ? { ...prev, started_at: freshBattle.started_at } : prev);
             setTimeLeft(calculateTimeLeft(freshBattle.started_at));
           }
           if (freshBattle.is_active === false) setIsFinishedLocally(true);
+        } else {
+          console.warn("[Poll Warning]: La consulta regresó vacía, manteniendo estado anterior.");
         }
       } catch (e) {
-        // Silent — don't crash arena on a polling miss
+        console.error("[Arena Poll] Network error:", e);
+      } finally {
+        isPolling = false;
       }
+    };
+
+    const interval = setInterval(() => {
+      if (document.hidden) return; // Freno absoluto
+      doPoll();
     }, 2000);
-      
+
+    // Initial trigger
+    if (!document.hidden) doPoll();
+
     return () => { 
       isMounted = false;
-      clearInterval(pollInterval);
+      clearInterval(interval);
       if (currentController) currentController.abort();
       ch.unsubscribe().then(() => {
         supabase.removeChannel(ch); 
@@ -944,7 +987,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   };
   const winData = getWinner();
 
-  if (isLoading) {
+  if (!isMounted || isLoading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-[#0d0008] text-white">
         <Loader2 className="w-12 h-12 text-[#00d1ff] animate-spin mb-4" />
@@ -1015,6 +1058,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
         token={livekitToken}
         connect={true}
         connectOptions={{ autoSubscribe: true, peerConnectionTimeout: 15000 }}
+        options={{ reconnectPolicy: new DefaultReconnectPolicy([2000, 5000]) }}
         video={true}
         audio={true}
         className="flex flex-col flex-[4] min-h-0 relative"

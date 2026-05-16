@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { Swords, Loader2 } from "lucide-react";
@@ -17,6 +17,17 @@ export default function AuthClient() {
 
   const supabase = createClient();
 
+  // Si el usuario ya está logueado y cae en /, redirigir inmediatamente
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        router.push("/dashboard");
+        router.refresh();
+      }
+    })();
+  }, [supabase, router]);
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -30,6 +41,7 @@ export default function AuthClient() {
         });
         if (error) throw error;
         router.push("/dashboard");
+        router.refresh();
       } else {
         const { error } = await supabase.auth.signUp({
           email,
@@ -44,6 +56,7 @@ export default function AuthClient() {
         if (error) throw error;
         // Supabase might require email confirmation, but assuming auto-login for now
         router.push("/dashboard");
+        router.refresh();
       }
     } catch (err: any) {
       setError(err.message || "Ocurrió un error.");
@@ -98,7 +111,7 @@ export default function AuthClient() {
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
               >
-                <label className="block text-sm font-medium text-white/70 mb-1">Usuario Único</label>
+                <label htmlFor="auth-username" className="block text-sm font-medium text-white/70 mb-1">Usuario Único</label>
                 <input
                   id="auth-username"
                   name="username"
@@ -113,7 +126,7 @@ export default function AuthClient() {
               </motion.div>
             )}
             <div>
-              <label className="block text-sm font-medium text-white/70 mb-1">Correo Electrónico</label>
+              <label htmlFor="auth-email" className="block text-sm font-medium text-white/70 mb-1">Correo Electrónico</label>
               <input
                 id="auth-email"
                 name="email"
@@ -127,7 +140,7 @@ export default function AuthClient() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-white/70 mb-1">Contraseña</label>
+              <label htmlFor="auth-password" className="block text-sm font-medium text-white/70 mb-1">Contraseña</label>
               <input
                 id="auth-password"
                 name="password"

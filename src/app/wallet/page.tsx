@@ -218,6 +218,12 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
     else { setSuccessMsg("¡Cobro solicitado! Espera la aprobación del Admin."); setWithdrawAmount(""); fetchData(); }
   };
 
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (loading) {
@@ -225,6 +231,14 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
     }
     return () => clearTimeout(timer);
   }, [loading]);
+
+  if (!isMounted) {
+    return (
+      <div className="flex-1 w-full flex items-center justify-center min-h-[50vh]">
+        <p className="text-white/30 text-xs">Cargando interfaz...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 max-w-4xl w-full mx-auto p-4 md:p-8 space-y-6">
@@ -396,8 +410,9 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
             
             <div className="flex flex-col gap-3">
               <div>
-                <label className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">Banco Emisor</label>
+                <label htmlFor="wallet-bank-select" className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">Banco Emisor</label>
                 <select 
+                  id="wallet-bank-select"
                   value={selectedBank} 
                   onChange={e => setSelectedBank(e.target.value)}
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#ff007a] transition-colors appearance-none"
@@ -407,7 +422,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
               </div>
 
               <div>
-                <label className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">Monto (Bs)</label>
+                <label htmlFor="wallet-amount-bs" className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">Monto (Bs)</label>
                 <input id="wallet-amount-bs" name="wallet-amount-bs" type="text" value={amountBs} onChange={e => setAmountBs(e.target.value)} placeholder="Ej. 500"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#ff007a] transition-colors" />
                 {amountBs && !isNaN(parseFloat(amountBs.replace(",", "."))) && (
@@ -419,7 +434,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
               </div>
               
               <div>
-                <label className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">Referencia (6 dígitos)</label>
+                <label htmlFor="wallet-ref-number" className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">Referencia (6 dígitos)</label>
                 <input id="wallet-ref-number" name="wallet-ref-number" type="text" maxLength={6} value={refNumber} onChange={e => setRefNumber(e.target.value.replace(/\D/g, ""))} placeholder="123456"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#ff007a] transition-colors" />
               </div>
@@ -458,7 +473,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
               </div>
             )}
             <div>
-              <label className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">WCR a Retirar</label>
+              <label htmlFor="wallet-withdraw-amount-wcr" className="block text-[10px] font-medium text-white/40 mb-1 uppercase tracking-wider">WCR a Retirar</label>
               <input id="wallet-withdraw-amount-wcr" name="wallet-withdraw-amount" type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Ej. 5000"
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors" />
               <p className="text-[10px] text-white/30 mt-1">Disponible: {fmtWCR(dualBal.wallet_credits)}</p>
@@ -514,7 +529,7 @@ const VZLA_BANKS = ["Banesco", "Banco de Venezuela", "Mercantil", "BBVA Provinci
               </div>
             )}
             <div>
-              <label className="block text-[10px] font-medium text-[#00d1ff]/60 mb-1 uppercase tracking-wider">BCR a Cobrar</label>
+              <label htmlFor="wallet-withdraw-amount-bcr" className="block text-[10px] font-medium text-[#00d1ff]/60 mb-1 uppercase tracking-wider">BCR a Cobrar</label>
               <input id="wallet-withdraw-amount-bcr" name="wallet-withdraw-amount" type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Ej. 5000"
                 className="w-full bg-black/50 border border-[#00d1ff]/30 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#00d1ff] transition-colors" />
               <p className="text-[10px] text-white/30 mt-1">Disponible: {fmtBCR(dualBal.battle_credits)}</p>
