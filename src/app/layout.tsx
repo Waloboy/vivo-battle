@@ -26,6 +26,21 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+          window.__ERRORS__ = [];
+          window.onerror = function(message, source, lineno, colno, error) {
+            const errData = { type: 'GLOBAL_ERROR', message, source, lineno, colno, stack: error?.stack, time: new Date().toLocaleTimeString() };
+            window.__ERRORS__.push(errData);
+            console.log("🚨 [CAPTURADO EN HEAD]:", errData);
+            try { localStorage.setItem('last_crash_errors', JSON.stringify(window.__ERRORS__)); } catch(e){}
+          };
+          window.onunhandledrejection = function(event) {
+            const errData = { type: 'PROMISE_REJECTION', reason: event.reason?.message || event.reason, stack: event.reason?.stack, time: new Date().toLocaleTimeString() };
+            window.__ERRORS__.push(errData);
+            console.log("🚨 [PROMESA ROTA IN HEAD]:", errData);
+            try { localStorage.setItem('last_crash_errors', JSON.stringify(window.__ERRORS__)); } catch(e){}
+          };
+        `}} />
       </head>
       <body 
         suppressHydrationWarning 

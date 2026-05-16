@@ -189,16 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Step 4: Re-check limpio al volver de segundo plano.
     // No confiar en el listener congelado — hacer un getSession() fresco.
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        // CANDADO DE INMUNIDAD: Si estamos en la arena de batalla, abortamos el refresco para no romper LiveKit
-        if (window.location.pathname.includes('/arena')) {
-          console.log("[Bypass Guard]: Usuario en la arena. Refresco automático cancelado para proteger streaming.");
-          return;
-        }
-        
-        console.log("[Bypass Guard]: Pestaña reactivada fuera de la arena. Forzando rehidratación limpia.");
-        window.location.reload();
-      }
+      console.log("[VISIBILITY]: Cambió a hidden=" + document.hidden);
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
