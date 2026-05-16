@@ -190,8 +190,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // No confiar en el listener congelado — hacer un getSession() fresco.
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        console.log("[Bypass Guard]: Pestaña reactivada. Forzando rehidratación limpia del navegador.");
-        // Forzar un refresco síncrono suave solo si la app se quedó en el limbo
+        // CANDADO DE INMUNIDAD: Si estamos en la arena de batalla, abortamos el refresco para no romper LiveKit
+        if (window.location.pathname.includes('/arena')) {
+          console.log("[Bypass Guard]: Usuario en la arena. Refresco automático cancelado para proteger streaming.");
+          return;
+        }
+        
+        console.log("[Bypass Guard]: Pestaña reactivada fuera de la arena. Forzando rehidratación limpia.");
         window.location.reload();
       }
     };
