@@ -41,6 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const didInit = useRef(false);
   const isRefreshing = useRef(false);
+  const isProcessingVisibility = useRef(false);
 
   // ── Persist auth state to sessionStorage ONLY (Memoria Cero) ──
   const persistAuth = useCallback((newUser: any, newProfile: any, newIsAdmin: boolean, newSession: any) => {
@@ -187,9 +188,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     // Step 4: Re-check limpio al volver de segundo plano.
-    // No confiar en el listener congelado — hacer un getSession() fresco.
     const handleVisibilityChange = () => {
-      console.log("[VISIBILITY]: Cambió a hidden=" + document.hidden);
+      // Si la pestaña se oculta, no nos interesa rastrearla
+      if (document.hidden) {
+        console.log("[DEBUG VISIBILITY]: Pestaña en segundo plano (hidden).");
+        return;
+      }
+
+      // CANDADO ANTI-REBOTES: Si ya se está ejecutando un cambio de foco, bloqueamos los disparos fantasmas
+      if (isProcessingVisibility.current) {
+        console.log("[Bypass Guard]: Disparo duplicado bloqueado para evitar bucle infinito.");
+        return;
+      }
+
+      // Activamos el candado
+      isProcessingVisibility.current = true;
+      console.log("[Bypass Guard]: Pestaña reactivada de forma limpia. Sincronizando sesión...");
+
+      // Liberamos el candado un segundo después, permitiendo que React respire y procese la UI
+      setTimeout(() => {
+        isProcessingVisibility.current = false;
+      }, 1000);
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
