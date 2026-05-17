@@ -103,9 +103,21 @@ function RoomReconnectOnFocus({ onRequestNewToken, livekitToken }: { onRequestNe
       }
 
       // Recover Tracks (Camera/Mic)
-      if (room.localParticipant) {
-        room.localParticipant.setCameraEnabled(true).catch(console.warn);
-        room.localParticipant.setMicrophoneEnabled(true).catch(console.warn);
+      if (!room || !room.localParticipant) {
+        console.log("[LIVEKIT GUARD]: Cancelando acción de cámara al recuperar foco. La sala aún no está inicializada.");
+        return;
+      }
+
+      try {
+        await room.localParticipant.setCameraEnabled(true);
+      } catch (camError) {
+        console.error("[LIVEKIT CAMERA ERROR]: Fallo al iniciar hardware de video al recuperar foco:", camError);
+      }
+
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+      } catch (micError) {
+        console.error("[LIVEKIT MIC ERROR]: Fallo al iniciar hardware de audio al recuperar foco:", micError);
       }
     };
 
@@ -289,35 +301,49 @@ function LocalControls({ phase }: { phase: BattlePhase }) {
   const [isMuted, setIsMuted] = useState(false);
 
   useEffect(() => {
-    if (!room || !room.localParticipant) {
-      console.error("[LIVEKIT CRITICAL]: El objeto room o localParticipant no existe en LocalControls al intentar configurar dispositivos.");
-      return;
-    }
+    const setupDevices = async () => {
+      if (!room || !room.localParticipant) {
+        console.log("[LIVEKIT GUARD]: Cancelando acción de cámara. La sala aún no está inicializada.");
+        return;
+      }
 
-    if (phase === "PREPARING") {
-      // 1. INICIALIZACIÓN VIVA DESDE EL CALENTAMIENTO
-      room.localParticipant.setCameraEnabled(false).catch(() => {});
-      room.localParticipant.setMicrophoneEnabled(true).catch(() => {});
-    } else {
-      // 2. DISPARO LIMPIO AL INICIAR LA BATALLA
-      console.log("[LIVEKIT]: Iniciando batalla real. Encendiendo cámaras...");
-      room.localParticipant.setCameraEnabled(true)
-        .then(() => console.log("[LIVEKIT]: Cámara encendida con éxito"))
-        .catch((err) => console.error("[LIVEKIT ERROR]: No se pudo encender la cámara", err));
-      room.localParticipant.setMicrophoneEnabled(true).catch(() => {});
-    }
+      try {
+        if (phase === "PREPARING") {
+          // 1. INICIALIZACIÓN VIVA DESDE EL CALENTAMIENTO
+          await room.localParticipant.setCameraEnabled(false);
+          await room.localParticipant.setMicrophoneEnabled(true);
+        } else {
+          // 2. DISPARO LIMPIO AL INICIAR LA BATALLA
+          console.log("[LIVEKIT]: Iniciando batalla real. Encendiendo cámaras...");
+          await room.localParticipant.setCameraEnabled(true);
+          console.log("[LIVEKIT]: Cámara encendida con éxito");
+          await room.localParticipant.setMicrophoneEnabled(true);
+        }
+      } catch (err) {
+        console.error("[LIVEKIT CAMERA ERROR]: Fallo al iniciar hardware de video/audio:", err);
+      }
+    };
+    
+    setupDevices();
   }, [room, phase]);
 
   if (isWarmup || !room?.localParticipant) return null;
 
   const toggleMute = async () => {
-    if (!room?.localParticipant) return;
-    if (isMuted) {
-      await room.localParticipant.setMicrophoneEnabled(true);
-      setIsMuted(false);
-    } else {
-      await room.localParticipant.setMicrophoneEnabled(false);
-      setIsMuted(true);
+    if (!room || !room.localParticipant) {
+      console.log("[LIVEKIT GUARD]: Cancelando toggleMute. La sala aún no está inicializada.");
+      return;
+    }
+    try {
+      if (isMuted) {
+        await room.localParticipant.setMicrophoneEnabled(true);
+        setIsMuted(false);
+      } else {
+        await room.localParticipant.setMicrophoneEnabled(false);
+        setIsMuted(true);
+      }
+    } catch (err) {
+      console.error("[LIVEKIT MIC ERROR]: Fallo al alternar el micrófono:", err);
     }
   };
 
