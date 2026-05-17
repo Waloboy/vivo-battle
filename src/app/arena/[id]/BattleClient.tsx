@@ -18,6 +18,8 @@ import { LiveKitRoom, VideoTrack, AudioTrack, useTracks, useLocalParticipant, us
 import { Track, RoomEvent, DefaultReconnectPolicy } from 'livekit-client';
 import '@livekit/components-styles';
 
+const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
+
 interface FloatTap { id: number; x: number; y: number }
 const BATTLE_DURATION = 315; // 2:00 prep + 3:00 battle + 15s farewell
 type BattlePhase = "PREPARING" | "BATTLE" | "ENDING" | "FINISHED";
@@ -97,14 +99,23 @@ function RoomReconnectOnFocus({ onRequestNewToken, livekitToken }: { onRequestNe
           console.log("[LiveKit] Token expired, requesting new token...");
           onRequestNewToken();
         } else {
-          console.log("[LiveKit] Token valid, running prepareConnection()...");
-          try { room.prepareConnection(process.env.NEXT_PUBLIC_LIVEKIT_URL || "", livekitToken); } catch {}
+          console.log("[LiveKit] Token valid, running room.connect()...");
+          if (!livekitUrl || !livekitToken) {
+            console.error("[LiveKit Error]: URL o token vacío. Cancelando conexión.");
+            return;
+          }
+          try { await room.connect(livekitUrl, livekitToken); } catch (e) { console.error(e); }
         }
       }
 
       // Recover Tracks (Camera/Mic)
       if (!room || !room.localParticipant) {
         console.log("[LIVEKIT GUARD]: Cancelando acción de cámara al recuperar foco. La sala aún no está inicializada.");
+        return;
+      }
+
+      if (room.state !== "connected") {
+        console.log("[LIVEKIT GUARD]: La sala no está conectada. No se permite encender la cámara.");
         return;
       }
 
@@ -133,7 +144,11 @@ function RoomReconnectOnFocus({ onRequestNewToken, livekitToken }: { onRequestNe
       if (isTokenExpired(livekitToken)) {
         onRequestNewToken();
       } else {
-        try { room.prepareConnection(process.env.NEXT_PUBLIC_LIVEKIT_URL || "", livekitToken); } catch {}
+        if (!livekitUrl || !livekitToken) {
+          console.error("[LiveKit Error]: URL o token vacío. Cancelando reconexión.");
+          return;
+        }
+        try { await room.connect(livekitUrl, livekitToken); } catch (e) { console.error(e); }
       }
     };
     room.on(RoomEvent.Disconnected, handleDisconnect);
@@ -314,6 +329,10 @@ function LocalControls({ phase }: { phase: BattlePhase }) {
           await room.localParticipant.setMicrophoneEnabled(true);
         } else {
           // 2. DISPARO LIMPIO AL INICIAR LA BATALLA
+          if (room.state !== "connected") {
+            console.log("[LIVEKIT GUARD]: La sala no está conectada. No se permite encender la cámara.");
+            return;
+          }
           console.log("[LIVEKIT]: Iniciando batalla real. Encendiendo cámaras...");
           await room.localParticipant.setCameraEnabled(true);
           console.log("[LIVEKIT]: Cámara encendida con éxito");
@@ -1076,9 +1095,10 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
           Si no ves video, recuerda dar permisos de cámara en el navegador o usar un túnel HTTPS
         </div>
       )}
-      <LiveKitRoom
-        serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
-        token={livekitToken}
+      {livekitUrl && (
+        <LiveKitRoom
+          serverUrl={livekitUrl}
+          token={livekitToken}
         connect={true}
         connectOptions={{ autoSubscribe: true, peerConnectionTimeout: 15000 }}
         options={{ reconnectPolicy: new DefaultReconnectPolicy([2000, 5000]) }}
@@ -1208,6 +1228,7 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
           </div>
         </div>
       </LiveKitRoom>
+      )}
 
       <div className="min-h-[120px] max-h-[200px] bg-black/40 backdrop-blur-xl p-2 flex flex-col border-t border-white/5 relative z-40">
         <div className="flex-1 overflow-y-auto space-y-1.5 mb-2 pr-1 flex flex-col">
