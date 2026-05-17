@@ -684,20 +684,36 @@ export default function BattleView({ params }: { params: Promise<{ id: string }>
   useEffect(() => {
     const syncInterval = setInterval(() => {
       if (pendingScoreA.current > 0) {
-        supabase.rpc('add_battle_points', {
-          p_battle_id: id,
-          p_side: 'A',
-          p_points: pendingScoreA.current
-        }).catch(console.error);
+        const pointsA = pendingScoreA.current;
         pendingScoreA.current = 0;
+        (async () => {
+          try {
+            const { error } = await supabase.rpc('add_battle_points', {
+              p_battle_id: id,
+              p_side: 'A',
+              p_points: pointsA
+            });
+            if (error) console.error("[SUPABASE RPC ERROR] add_battle_points A:", error.message);
+          } catch (err) {
+            console.error("[CRITICAL RPC CRASH] add_battle_points A:", err);
+          }
+        })();
       }
       if (pendingScoreB.current > 0) {
-        supabase.rpc('add_battle_points', {
-          p_battle_id: id,
-          p_side: 'B',
-          p_points: pendingScoreB.current
-        }).catch(console.error);
+        const pointsB = pendingScoreB.current;
         pendingScoreB.current = 0;
+        (async () => {
+          try {
+            const { error } = await supabase.rpc('add_battle_points', {
+              p_battle_id: id,
+              p_side: 'B',
+              p_points: pointsB
+            });
+            if (error) console.error("[SUPABASE RPC ERROR] add_battle_points B:", error.message);
+          } catch (err) {
+            console.error("[CRITICAL RPC CRASH] add_battle_points B:", err);
+          }
+        })();
       }
     }, 500);
     return () => clearInterval(syncInterval);
